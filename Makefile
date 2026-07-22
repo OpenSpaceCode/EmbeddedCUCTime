@@ -1,24 +1,47 @@
 CC ?= cc
-# Minimal Makefile: only build and run the unit test binary.
-CFLAGS ?= -O2 -Iinclude -Wall -Wextra -std=c11
+AR ?= ar
+CFLAGS ?= -O2 -std=c11 -Wall -Wextra -Iinclude
 BUILD_DIR = build
-CTEST_PATH = $(BUILD_DIR)/tests/ctest
 
-all: ctest
+LIB = $(BUILD_DIR)/libcuc.a
+OBJ = $(BUILD_DIR)/src/cuc.o
+CTEST = $(BUILD_DIR)/tests/ctest
+EXAMPLE = $(BUILD_DIR)/examples/cuc_example
 
-ctest: $(CTEST_PATH)
+SRC = src/cuc.c
+HDR = include/cuc.h
 
-$(CTEST_PATH): tests/unit_tests.c
+all: $(LIB) $(CTEST) $(EXAMPLE)
+
+lib: $(LIB)
+
+$(OBJ): $(SRC) $(HDR)
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Iinclude tests/unit_tests.c -o $(CTEST_PATH)
+	$(CC) $(CFLAGS) -Iinclude -c $(SRC) -o $@
 
-run: ctest
-	$(CTEST_PATH)
+$(LIB): $(OBJ)
+	mkdir -p $(dir $@)
+	$(AR) rcs $@ $(OBJ)
+
+ctest: $(CTEST)
+
+$(CTEST): tests/unit_tests.c tests/cunit.h $(SRC) $(HDR)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Iinclude -Itests tests/unit_tests.c $(SRC) -o $@
+
+example: $(EXAMPLE)
+
+$(EXAMPLE): examples/cuc_example.c $(SRC) $(HDR)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Iinclude examples/cuc_example.c $(SRC) -o $@
+
+run: $(CTEST)
+	$(CTEST)
+
+coverage-html:
+	bash tools/coverage-html.sh
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-coverage-html:
-	bash tools/coverage_html.sh
-
-.PHONY: all ctest run clean
+.PHONY: all lib ctest example run coverage-html clean
