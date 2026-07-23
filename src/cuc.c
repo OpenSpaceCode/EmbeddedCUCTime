@@ -62,18 +62,22 @@ cuc_status_t cuc_format_validate(const cuc_format_t *fmt)
     {
         return CUC_ERR_NULL;
     }
+
     if ((fmt->epoch != CUC_EPOCH_CCSDS) && (fmt->epoch != CUC_EPOCH_AGENCY))
     {
         return CUC_ERR_FORMAT;
     }
+
     if ((fmt->basic_octets < CUC_BASIC_OCTETS_MIN) || (fmt->basic_octets > CUC_BASIC_OCTETS_MAX))
     {
         return CUC_ERR_FORMAT;
     }
+
     if (fmt->fraction_octets > CUC_FRACTION_OCTETS_MAX)
     {
         return CUC_ERR_FORMAT;
     }
+
     return CUC_OK;
 }
 
@@ -95,6 +99,7 @@ size_t cuc_pfield_size(const cuc_format_t *fmt)
     {
         return 0;
     }
+
     return cuc_format_is_extended(fmt) ? 2u : 1u;
 }
 
@@ -104,6 +109,7 @@ size_t cuc_tfield_size(const cuc_format_t *fmt)
     {
         return 0;
     }
+
     return (size_t)fmt->basic_octets + (size_t)fmt->fraction_octets;
 }
 
@@ -122,6 +128,7 @@ cuc_status_t cuc_pfield_encode(const cuc_format_t *fmt,
     {
         return status;
     }
+
     if ((!buf) || (!written))
     {
         return CUC_ERR_NULL;
@@ -151,6 +158,7 @@ cuc_status_t cuc_pfield_encode(const cuc_format_t *fmt,
     }
 
     *written = size;
+
     return CUC_OK;
 }
 
@@ -163,6 +171,7 @@ cuc_status_t cuc_pfield_decode(const uint8_t *buf,
     {
         return CUC_ERR_NULL;
     }
+
     if (buf_len < 1u)
     {
         return CUC_ERR_BUFFER;
@@ -182,8 +191,10 @@ cuc_status_t cuc_pfield_decode(const uint8_t *buf,
     if ((oct1 & CUC_P1_EXTENSION) == 0u)
     {
         *consumed = 1u;
+
         return CUC_OK;
     }
+
     if (buf_len < 2u)
     {
         return CUC_ERR_BUFFER;
@@ -195,9 +206,11 @@ cuc_status_t cuc_pfield_decode(const uint8_t *buf,
     {
         return CUC_ERR_UNSUPPORTED;
     }
+
     fmt->basic_octets += (uint8_t)((oct2 >> CUC_P2_ADD_BASIC_SHIFT) & CUC_P2_ADD_BASIC_MASK);
     fmt->fraction_octets += (uint8_t)((oct2 >> CUC_P2_ADD_FRAC_SHIFT) & CUC_P2_ADD_FRAC_MASK);
     *consumed = 2u;
+
     return CUC_OK;
 }
 
@@ -212,6 +225,7 @@ cuc_status_t cuc_tfield_encode(const cuc_time_t *time,
     {
         return status;
     }
+
     if ((!time) || (!buf) || (!written))
     {
         return CUC_ERR_NULL;
@@ -239,10 +253,12 @@ cuc_status_t cuc_tfield_encode(const cuc_time_t *time,
         {
             octet = (uint8_t)(time->fraction >> (56u - (unsigned)j * 8u));
         }
+
         buf[fmt->basic_octets + j] = octet;
     }
 
     *written = size;
+
     return CUC_OK;
 }
 
@@ -257,6 +273,7 @@ cuc_status_t cuc_tfield_decode(const uint8_t *buf,
     {
         return status;
     }
+
     if ((!buf) || (!time) || (!consumed))
     {
         return CUC_ERR_NULL;
@@ -283,6 +300,7 @@ cuc_status_t cuc_tfield_decode(const uint8_t *buf,
     time->seconds = seconds;
     time->fraction = fraction;
     *consumed = size;
+
     return CUC_OK;
 }
 
@@ -312,6 +330,7 @@ cuc_status_t cuc_encode(const cuc_time_t *time,
     }
 
     *written = p_len + t_len;
+
     return CUC_OK;
 }
 
@@ -341,6 +360,7 @@ cuc_status_t cuc_decode(const uint8_t *buf,
     }
 
     *consumed = p_len + t_len;
+
     return CUC_OK;
 }
 
@@ -355,6 +375,7 @@ double cuc_time_to_seconds(const cuc_time_t *time)
     {
         return 0.0;
     }
+
     return (double)time->seconds + (double)time->fraction / CUC_TWO_POW_64;
 }
 
@@ -365,9 +386,11 @@ cuc_time_t cuc_time_from_seconds(double seconds)
     {
         return time;
     }
+
     time.seconds = (uint64_t)seconds;
     double frac = seconds - (double)time.seconds;
     time.fraction = (uint64_t)(frac * CUC_TWO_POW_64);
+
     return time;
 }
 
