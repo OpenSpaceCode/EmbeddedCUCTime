@@ -132,7 +132,7 @@ static int test_seconds_conversion(void)
     ASSERT_TRUE(t.fraction == 0x8000000000000000u);
 
     double s = cuc_time_to_seconds(&t);
-    ASSERT_TRUE(s > 1.4999 && s < 1.5001);
+    ASSERT_TRUE((s > 1.4999) && (s < 1.5001));
     return 0;
 }
 #endif

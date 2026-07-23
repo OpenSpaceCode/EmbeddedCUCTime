@@ -58,15 +58,15 @@
 
 cuc_status_t cuc_format_validate(const cuc_format_t *fmt)
 {
-    if (fmt == NULL)
+    if (!fmt)
     {
         return CUC_ERR_NULL;
     }
-    if (fmt->epoch != CUC_EPOCH_CCSDS && fmt->epoch != CUC_EPOCH_AGENCY)
+    if ((fmt->epoch != CUC_EPOCH_CCSDS) && (fmt->epoch != CUC_EPOCH_AGENCY))
     {
         return CUC_ERR_FORMAT;
     }
-    if (fmt->basic_octets < CUC_BASIC_OCTETS_MIN || fmt->basic_octets > CUC_BASIC_OCTETS_MAX)
+    if ((fmt->basic_octets < CUC_BASIC_OCTETS_MIN) || (fmt->basic_octets > CUC_BASIC_OCTETS_MAX))
     {
         return CUC_ERR_FORMAT;
     }
@@ -86,12 +86,12 @@ cuc_status_t cuc_format_validate(const cuc_format_t *fmt)
  */
 static bool cuc_format_is_extended(const cuc_format_t *fmt)
 {
-    return fmt->basic_octets > CUC_P1_BASIC_MAX || fmt->fraction_octets > CUC_P1_FRAC_MAX;
+    return (fmt->basic_octets > CUC_P1_BASIC_MAX) || (fmt->fraction_octets > CUC_P1_FRAC_MAX);
 }
 
 size_t cuc_pfield_size(const cuc_format_t *fmt)
 {
-    if (fmt == NULL)
+    if (!fmt)
     {
         return 0;
     }
@@ -100,7 +100,7 @@ size_t cuc_pfield_size(const cuc_format_t *fmt)
 
 size_t cuc_tfield_size(const cuc_format_t *fmt)
 {
-    if (fmt == NULL)
+    if (!fmt)
     {
         return 0;
     }
@@ -122,7 +122,7 @@ cuc_status_t cuc_pfield_encode(const cuc_format_t *fmt,
     {
         return status;
     }
-    if (buf == NULL || written == NULL)
+    if ((!buf) || (!written))
     {
         return CUC_ERR_NULL;
     }
@@ -159,7 +159,7 @@ cuc_status_t cuc_pfield_decode(const uint8_t *buf,
                                cuc_format_t *fmt,
                                size_t *consumed)
 {
-    if (buf == NULL || fmt == NULL || consumed == NULL)
+    if ((!buf) || (!fmt) || (!consumed))
     {
         return CUC_ERR_NULL;
     }
@@ -170,7 +170,7 @@ cuc_status_t cuc_pfield_decode(const uint8_t *buf,
 
     uint8_t oct1 = buf[0];
     uint8_t id = (oct1 >> CUC_P1_ID_SHIFT) & CUC_P1_ID_MASK;
-    if (id != CUC_EPOCH_CCSDS && id != CUC_EPOCH_AGENCY)
+    if ((id != CUC_EPOCH_CCSDS) && (id != CUC_EPOCH_AGENCY))
     {
         return CUC_ERR_PFIELD_ID;
     }
@@ -212,7 +212,7 @@ cuc_status_t cuc_tfield_encode(const cuc_time_t *time,
     {
         return status;
     }
-    if (time == NULL || buf == NULL || written == NULL)
+    if ((!time) || (!buf) || (!written))
     {
         return CUC_ERR_NULL;
     }
@@ -257,7 +257,7 @@ cuc_status_t cuc_tfield_decode(const uint8_t *buf,
     {
         return status;
     }
-    if (buf == NULL || time == NULL || consumed == NULL)
+    if ((!buf) || (!time) || (!consumed))
     {
         return CUC_ERR_NULL;
     }
@@ -275,7 +275,7 @@ cuc_status_t cuc_tfield_decode(const uint8_t *buf,
     }
 
     uint64_t fraction = 0;
-    for (uint8_t j = 0; j < fmt->fraction_octets && j < CUC_FRACTION_STORED_OCTETS; j++)
+    for (uint8_t j = 0; (j < fmt->fraction_octets) && (j < CUC_FRACTION_STORED_OCTETS); j++)
     {
         fraction |= (uint64_t)buf[fmt->basic_octets + j] << (56u - (unsigned)j * 8u);
     }
@@ -292,7 +292,7 @@ cuc_status_t cuc_encode(const cuc_time_t *time,
                         size_t buf_len,
                         size_t *written)
 {
-    if (written == NULL)
+    if (!written)
     {
         return CUC_ERR_NULL;
     }
@@ -321,7 +321,7 @@ cuc_status_t cuc_decode(const uint8_t *buf,
                         cuc_time_t *time,
                         size_t *consumed)
 {
-    if (consumed == NULL)
+    if (!consumed)
     {
         return CUC_ERR_NULL;
     }
@@ -351,7 +351,7 @@ cuc_status_t cuc_decode(const uint8_t *buf,
 
 double cuc_time_to_seconds(const cuc_time_t *time)
 {
-    if (time == NULL)
+    if (!time)
     {
         return 0.0;
     }
