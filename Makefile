@@ -1,6 +1,6 @@
 CC ?= cc
 AR ?= ar
-CFLAGS ?= -O2 -std=c11 -Wall -Wextra -Iinclude
+CFLAGS ?= -O2 -std=c99 -Wall -Wextra -Iinclude
 BUILD_DIR = build
 
 LIB = $(BUILD_DIR)/libcuc.a
@@ -25,9 +25,9 @@ $(LIB): $(OBJ)
 
 ctest: $(CTEST)
 
-$(CTEST): tests/unit_tests.c tests/cunit.h $(SRC) $(HDR)
+$(CTEST): tests/unit_tests.c tests/test_cuc.c tests/cunit.h tests/test_runners.h $(SRC) $(HDR)
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Iinclude -Itests tests/unit_tests.c $(SRC) -o $@
+	$(CC) $(CFLAGS) -Iinclude -Itests tests/unit_tests.c tests/test_cuc.c $(SRC) -o $@
 
 example: $(EXAMPLE)
 
