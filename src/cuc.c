@@ -12,25 +12,48 @@
 #include "cuc.h"
 
 /* Bit-0-is-MSB masks for P-field octet 1 (CCSDS 301.0-B-4, 3.2.2). */
-#define CUC_P1_EXTENSION 0x80u /* bit 0 */
-#define CUC_P1_ID_SHIFT 4      /* bits 1-3 */
+/** @brief P-field octet 1 extension flag (bit 0): another P-field octet follows. */
+#define CUC_P1_EXTENSION 0x80u
+
+/** @brief Left shift of the P-field octet 1 time code identification field (bits 1-3). */
+#define CUC_P1_ID_SHIFT 4
+
+/** @brief Mask for the 3-bit time code identification field. */
 #define CUC_P1_ID_MASK 0x07u
-#define CUC_P1_BASIC_SHIFT 2 /* bits 4-5: (basic octets - 1) */
+
+/** @brief Left shift of the P-field octet 1 basic-octet count (bits 4-5), holding (count - 1). */
+#define CUC_P1_BASIC_SHIFT 2
+
+/** @brief Mask for the 2-bit basic-octet count field in P-field octet 1. */
 #define CUC_P1_BASIC_MASK 0x03u
-#define CUC_P1_FRAC_MASK 0x03u /* bits 6-7: fractional octets */
+
+/** @brief Mask for the 2-bit fractional-octet count field in P-field octet 1 (bits 6-7). */
+#define CUC_P1_FRAC_MASK 0x03u
 
 /* Masks for P-field octet 2. */
-#define CUC_P2_EXTENSION 0x80u   /* bit 0 */
-#define CUC_P2_ADD_BASIC_SHIFT 5 /* bits 1-2 */
+/** @brief P-field octet 2 extension flag (bit 0): a third P-field octet would follow. */
+#define CUC_P2_EXTENSION 0x80u
+
+/** @brief Left shift of the additional basic-octet count in P-field octet 2 (bits 1-2). */
+#define CUC_P2_ADD_BASIC_SHIFT 5
+
+/** @brief Mask for the 2-bit additional basic-octet count field in P-field octet 2. */
 #define CUC_P2_ADD_BASIC_MASK 0x03u
-#define CUC_P2_ADD_FRAC_SHIFT 2 /* bits 3-5 */
+
+/** @brief Left shift of the additional fractional-octet count in P-field octet 2 (bits 3-5). */
+#define CUC_P2_ADD_FRAC_SHIFT 2
+
+/** @brief Mask for the 3-bit additional fractional-octet count field in P-field octet 2. */
 #define CUC_P2_ADD_FRAC_MASK 0x07u
 
-/* Octet 1 alone can describe at most 4 basic and 3 fractional octets. */
+/** @brief Maximum basic-time octets encodable in P-field octet 1 alone. */
 #define CUC_P1_BASIC_MAX 4
+
+/** @brief Maximum fractional-time octets encodable in P-field octet 1 alone. */
 #define CUC_P1_FRAC_MAX 3
 
-/* Fractional resolution beyond 8 octets falls below the Q0.64 representation. */
+/** @brief Fractional octets stored in the Q0.64 representation; deeper octets fall below 2^-64 s.
+ */
 #define CUC_FRACTION_STORED_OCTETS 8
 
 cuc_status_t cuc_format_validate(const cuc_format_t *fmt)
@@ -54,6 +77,13 @@ cuc_status_t cuc_format_validate(const cuc_format_t *fmt)
     return CUC_OK;
 }
 
+/**
+ * @brief Test whether a format needs a second P-field octet.
+ *
+ * @param[in] fmt Format to inspect (assumed non-NULL and valid).
+ *
+ * @return true if the basic or fractional octet count exceeds what P-field octet 1 can hold.
+ */
 static bool cuc_format_is_extended(const cuc_format_t *fmt)
 {
     return fmt->basic_octets > CUC_P1_BASIC_MAX || fmt->fraction_octets > CUC_P1_FRAC_MAX;
@@ -316,7 +346,7 @@ cuc_status_t cuc_decode(const uint8_t *buf,
 
 #ifndef CUC_NO_FLOAT
 
-/* 2^64 as a double, for converting the Q0.64 fraction to/from seconds. */
+/** @brief 2^64 as a double, for converting the Q0.64 fraction to/from seconds. */
 #    define CUC_TWO_POW_64 18446744073709551616.0
 
 double cuc_time_to_seconds(const cuc_time_t *time)
