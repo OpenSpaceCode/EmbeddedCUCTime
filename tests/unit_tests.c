@@ -1,21 +1,22 @@
-#include "cunit.h"
+#include "test_runners.h"
+
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-static int test_case_0(void) {
+#define REPORT(label, r) printf("  %-14s Passed %d/%d\n\n", label ":", (r).passed, (r).total)
 
-  return 0;
-}
+int main(void)
+{
+    test_result_t r;
+    int total_passed = 0;
+    int total_tests = 0;
 
-int main(void) {
-  RUN_TEST(test_case_0);
+    r = test_cuc_run_all();
+    REPORT("cuc", r);
+    total_passed += r.passed;
+    total_tests += r.total;
 
-  if (cunit_overall_failures == 0) {
-    printf("ALL TESTS PASSED\n");
-    return 0;
-  } else {
-    printf("%d TEST(S) FAILED\n", cunit_overall_failures);
-    return 1;
-  }
+    printf("  ------------------------------\n");
+    printf("  %-14s Passed %d/%d\n", "All UT:", total_passed, total_tests);
+
+    return (total_passed == total_tests) ? 0 : 1;
 }
