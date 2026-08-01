@@ -10,24 +10,56 @@
 
 #include "cds.h"
 
-/* P-field bit fields, bit 0 = MSB (CCSDS 301.0-B-4, 3.3.2). */
-#define CDS_P_ID_SHIFT 4 /* bits 1-3: time code identification */
-#define CDS_P_ID_MASK 0x07u
-#define CDS_P_ID_VALUE 0x04u /* CDS identification = 100 */
-#define CDS_P_EPOCH_SHIFT 3  /* bit 4: epoch identification */
-#define CDS_P_EPOCH_MASK 0x01u
-#define CDS_P_DAY_SHIFT 2 /* bit 5: day segment length */
-#define CDS_P_DAY_MASK 0x01u
-#define CDS_P_SUBMS_MASK 0x03u /* bits 6-7: sub-millisecond resolution */
+/* Bit-0-is-MSB masks for the P-field octet (CCSDS 301.0-B-4, 3.3.2). */
+/** @brief Left shift of the P-field time code identification field (bits 1-3). */
+#define CDS_P_ID_SHIFT 4
 
+/** @brief Mask for the 3-bit time code identification field. */
+#define CDS_P_ID_MASK 0x07u
+
+/** @brief Time code identification value denoting CDS (binary 100). */
+#define CDS_P_ID_VALUE 0x04u
+
+/** @brief Left shift of the P-field epoch identification field (bit 4). */
+#define CDS_P_EPOCH_SHIFT 3
+
+/** @brief Mask for the 1-bit epoch identification field. */
+#define CDS_P_EPOCH_MASK 0x01u
+
+/** @brief Left shift of the P-field day segment length field (bit 5). */
+#define CDS_P_DAY_SHIFT 2
+
+/** @brief Mask for the 1-bit day segment length field. */
+#define CDS_P_DAY_MASK 0x01u
+
+/** @brief Mask for the 2-bit sub-millisecond resolution field (bits 6-7). */
+#define CDS_P_SUBMS_MASK 0x03u
+
+/** @brief Octets in a 16-bit day segment. */
 #define CDS_DAY_16BIT_OCTETS 2
+
+/** @brief Octets in a 24-bit day segment. */
 #define CDS_DAY_24BIT_OCTETS 3
+
+/** @brief Octets in a microsecond-of-millisecond sub-millisecond segment. */
 #define CDS_SUBMS_US_OCTETS 2
+
+/** @brief Octets in a picosecond-of-millisecond sub-millisecond segment. */
 #define CDS_SUBMS_PS_OCTETS 4
 
+/** @brief Largest day count a 16-bit day segment can carry. */
 #define CDS_DAY_16BIT_MAX 0xFFFFu
+
+/** @brief Largest day count a 24-bit day segment can carry. */
 #define CDS_DAY_24BIT_MAX 0xFFFFFFu
 
+/**
+ * @brief Write an unsigned value into a buffer, most significant octet first.
+ *
+ * @param[out] buf    Output buffer, assumed to hold at least @p octets octets.
+ * @param[in]  value  Value to write; octets above its width are written as zero.
+ * @param[in]  octets Number of octets to write.
+ */
 static void cds_write_be(uint8_t *buf, uint32_t value, size_t octets)
 {
     for (size_t i = 0; i < octets; i++)
@@ -36,6 +68,14 @@ static void cds_write_be(uint8_t *buf, uint32_t value, size_t octets)
     }
 }
 
+/**
+ * @brief Read an unsigned value from a buffer, most significant octet first.
+ *
+ * @param[in] buf    Input buffer, assumed to hold at least @p octets octets.
+ * @param[in] octets Number of octets to read, at most 4.
+ *
+ * @return The decoded value.
+ */
 static uint32_t cds_read_be(const uint8_t *buf, size_t octets)
 {
     uint32_t value = 0;
@@ -174,6 +214,17 @@ cds_status_t cds_pfield_decode(const uint8_t *buf,
     return CDS_OK;
 }
 
+/**
+ * @brief Test whether a time value fits the segments its format provides.
+ *
+ * The millisecond-of-day counter always fits its 32-bit segment, so only the
+ * day count and the microsecond sub-millisecond segment are bounded here.
+ *
+ * @param[in] time Time value to check (assumed non-NULL).
+ * @param[in] fmt  Format describing the segment widths (assumed non-NULL and valid).
+ *
+ * @return #CDS_OK when every field fits; #CDS_ERR_FORMAT otherwise.
+ */
 static cds_status_t cds_check_ranges(const cds_time_t *time, const cds_format_t *fmt)
 {
     uint32_t day_max = fmt->day_length == CDS_DAY_24BIT ? CDS_DAY_24BIT_MAX : CDS_DAY_16BIT_MAX;
