@@ -88,20 +88,20 @@ static uint32_t cds_read_be(const uint8_t *buf, size_t octets)
 
 cds_status_t cds_format_validate(const cds_format_t *fmt)
 {
-    if (fmt == NULL)
+    if (!fmt)
     {
         return CDS_ERR_NULL;
     }
-    if (fmt->epoch != CDS_EPOCH_CCSDS && fmt->epoch != CDS_EPOCH_AGENCY)
+    if ((fmt->epoch != CDS_EPOCH_CCSDS) && (fmt->epoch != CDS_EPOCH_AGENCY))
     {
         return CDS_ERR_FORMAT;
     }
-    if (fmt->day_length != CDS_DAY_16BIT && fmt->day_length != CDS_DAY_24BIT)
+    if ((fmt->day_length != CDS_DAY_16BIT) && (fmt->day_length != CDS_DAY_24BIT))
     {
         return CDS_ERR_FORMAT;
     }
-    if (fmt->submillisecond != CDS_SUBMS_NONE && fmt->submillisecond != CDS_SUBMS_US &&
-        fmt->submillisecond != CDS_SUBMS_PS)
+    if ((fmt->submillisecond != CDS_SUBMS_NONE) && (fmt->submillisecond != CDS_SUBMS_US) &&
+        (fmt->submillisecond != CDS_SUBMS_PS))
     {
         return CDS_ERR_FORMAT;
     }
@@ -110,7 +110,7 @@ cds_status_t cds_format_validate(const cds_format_t *fmt)
 
 size_t cds_day_size(const cds_format_t *fmt)
 {
-    if (fmt == NULL)
+    if (!fmt)
     {
         return 0;
     }
@@ -119,7 +119,7 @@ size_t cds_day_size(const cds_format_t *fmt)
 
 size_t cds_subms_size(const cds_format_t *fmt)
 {
-    if (fmt == NULL)
+    if (!fmt)
     {
         return 0;
     }
@@ -136,7 +136,7 @@ size_t cds_subms_size(const cds_format_t *fmt)
 
 size_t cds_tfield_size(const cds_format_t *fmt)
 {
-    if (fmt == NULL)
+    if (!fmt)
     {
         return 0;
     }
@@ -145,7 +145,7 @@ size_t cds_tfield_size(const cds_format_t *fmt)
 
 size_t cds_size(const cds_format_t *fmt)
 {
-    if (fmt == NULL)
+    if (!fmt)
     {
         return 0;
     }
@@ -162,7 +162,7 @@ cds_status_t cds_pfield_encode(const cds_format_t *fmt,
     {
         return status;
     }
-    if (buf == NULL || written == NULL)
+    if ((!buf) || (!written))
     {
         return CDS_ERR_NULL;
     }
@@ -184,7 +184,7 @@ cds_status_t cds_pfield_decode(const uint8_t *buf,
                                cds_format_t *fmt,
                                size_t *consumed)
 {
-    if (buf == NULL || fmt == NULL || consumed == NULL)
+    if ((!buf) || (!fmt) || (!consumed))
     {
         return CDS_ERR_NULL;
     }
@@ -204,8 +204,8 @@ cds_status_t cds_pfield_decode(const uint8_t *buf,
     fmt->submillisecond = (cds_subms_t)(octet & CDS_P_SUBMS_MASK);
 
     /* Bits 6-7 = '11' is reserved for future use (CCSDS 301.0-B-4, 3.3.2). */
-    if (fmt->submillisecond != CDS_SUBMS_NONE && fmt->submillisecond != CDS_SUBMS_US &&
-        fmt->submillisecond != CDS_SUBMS_PS)
+    if ((fmt->submillisecond != CDS_SUBMS_NONE) && (fmt->submillisecond != CDS_SUBMS_US) &&
+        (fmt->submillisecond != CDS_SUBMS_PS))
     {
         return CDS_ERR_FORMAT;
     }
@@ -232,7 +232,7 @@ static cds_status_t cds_check_ranges(const cds_time_t *time, const cds_format_t 
     {
         return CDS_ERR_FORMAT;
     }
-    if (fmt->submillisecond == CDS_SUBMS_US && time->submilliseconds > CDS_DAY_16BIT_MAX)
+    if ((fmt->submillisecond == CDS_SUBMS_US) && (time->submilliseconds > CDS_DAY_16BIT_MAX))
     {
         return CDS_ERR_FORMAT;
     }
@@ -250,7 +250,7 @@ cds_status_t cds_tfield_encode(const cds_time_t *time,
     {
         return status;
     }
-    if (time == NULL || buf == NULL || written == NULL)
+    if ((!time) || (!buf) || (!written))
     {
         return CDS_ERR_NULL;
     }
@@ -290,7 +290,7 @@ cds_status_t cds_tfield_decode(const uint8_t *buf,
     {
         return status;
     }
-    if (buf == NULL || time == NULL || consumed == NULL)
+    if ((!buf) || (!time) || (!consumed))
     {
         return CDS_ERR_NULL;
     }
@@ -318,7 +318,7 @@ cds_status_t cds_encode(const cds_time_t *time,
                         size_t buf_len,
                         size_t *written)
 {
-    if (written == NULL)
+    if (!written)
     {
         return CDS_ERR_NULL;
     }
@@ -347,7 +347,7 @@ cds_status_t cds_decode(const uint8_t *buf,
                         cds_time_t *time,
                         size_t *consumed)
 {
-    if (consumed == NULL)
+    if (!consumed)
     {
         return CDS_ERR_NULL;
     }
