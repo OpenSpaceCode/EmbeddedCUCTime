@@ -4,37 +4,59 @@ OPT ?= -O2
 CFLAGS ?= -std=c99 -Wall -Wextra -Iinclude
 BUILD_DIR = build
 
-LIB = $(BUILD_DIR)/libcuc.a
-OBJ = $(BUILD_DIR)/src/cuc.o
+CUC_LIB = $(BUILD_DIR)/libcuc.a
+CUC_OBJ = $(BUILD_DIR)/src/cuc.o
+CDS_LIB = $(BUILD_DIR)/libcds.a
+CDS_OBJ = $(BUILD_DIR)/src/cds.o
 CTEST = $(BUILD_DIR)/tests/ctest
-EXAMPLE = $(BUILD_DIR)/examples/cuc_example
+CUC_EXAMPLE = $(BUILD_DIR)/examples/cuc_example
+CDS_EXAMPLE = $(BUILD_DIR)/examples/cds_example
 
-SRC = src/cuc.c
-HDR = include/cuc.h
+CUC_SRC = src/cuc.c
+CUC_HDR = include/cuc.h
+CDS_SRC = src/cds.c
+CDS_HDR = include/cds.h
 
-all: $(LIB) $(CTEST) $(EXAMPLE)
+LIBS = $(CUC_LIB) $(CDS_LIB)
+EXAMPLES = $(CUC_EXAMPLE) $(CDS_EXAMPLE)
 
-lib: $(LIB)
+all: $(LIBS) $(CTEST) $(EXAMPLES)
 
-$(OBJ): $(SRC) $(HDR)
+lib: $(LIBS)
+
+$(CUC_OBJ): $(CUC_SRC) $(CUC_HDR)
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(OPT) -Iinclude -c $(SRC) -o $@
+	$(CC) $(CFLAGS) $(OPT) -Iinclude -c $(CUC_SRC) -o $@
 
-$(LIB): $(OBJ)
+$(CUC_LIB): $(CUC_OBJ)
 	mkdir -p $(dir $@)
-	$(AR) rcs $@ $(OBJ)
+	$(AR) rcs $@ $(CUC_OBJ)
+
+$(CDS_OBJ): $(CDS_SRC) $(CDS_HDR)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(OPT) -Iinclude -c $(CDS_SRC) -o $@
+
+$(CDS_LIB): $(CDS_OBJ)
+	mkdir -p $(dir $@)
+	$(AR) rcs $@ $(CDS_OBJ)
 
 ctest: $(CTEST)
 
-$(CTEST): tests/unit_tests.c tests/test_cuc.c tests/cunit.h tests/test_runners.h $(SRC) $(HDR)
+$(CTEST): tests/unit_tests.c tests/test_cuc.c tests/test_cds.c tests/cunit.h tests/test_runners.h \
+          $(CUC_SRC) $(CUC_HDR) $(CDS_SRC) $(CDS_HDR)
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(OPT) -Iinclude -Itests tests/unit_tests.c tests/test_cuc.c $(SRC) -o $@
+	$(CC) $(CFLAGS) $(OPT) -Iinclude -Itests \
+	    tests/unit_tests.c tests/test_cuc.c tests/test_cds.c $(CUC_SRC) $(CDS_SRC) -o $@
 
-example: $(EXAMPLE)
+example: $(EXAMPLES)
 
-$(EXAMPLE): examples/cuc_example.c $(SRC) $(HDR)
+$(CUC_EXAMPLE): examples/cuc_example.c $(CUC_SRC) $(CUC_HDR)
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(OPT) -Iinclude examples/cuc_example.c $(SRC) -o $@
+	$(CC) $(CFLAGS) $(OPT) -Iinclude examples/cuc_example.c $(CUC_SRC) -o $@
+
+$(CDS_EXAMPLE): examples/cds_example.c $(CDS_SRC) $(CDS_HDR)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(OPT) -Iinclude examples/cds_example.c $(CDS_SRC) -o $@
 
 run: $(CTEST)
 	$(CTEST)

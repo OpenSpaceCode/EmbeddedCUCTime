@@ -15,6 +15,11 @@ int main(void)
     total_passed += r.passed;
     total_tests += r.total;
 
+    r = test_cds_run_all();
+    REPORT("cds", r);
+    total_passed += r.passed;
+    total_tests += r.total;
+
     printf("  ------------------------------\n");
     printf("  %-14s Passed %d/%d\n", "All UT:", total_passed, total_tests);
 
