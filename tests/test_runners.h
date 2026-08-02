@@ -9,5 +9,6 @@ typedef struct
 
 test_result_t test_cuc_run_all(void);
 test_result_t test_cds_run_all(void);
+test_result_t test_ccs_run_all(void);
 
 #endif /* TEST_RUNNERS_H */
