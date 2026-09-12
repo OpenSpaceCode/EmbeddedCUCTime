@@ -150,7 +150,7 @@ cds_status_t cds_format_validate(const cds_format_t *fmt);
  *
  * @param[in] fmt Format to size.
  *
- * @return 2 or 3 on success, or 0 if @p fmt is NULL.
+ * @return 2 or 3 on success, or 0 if @p fmt is NULL or invalid.
  */
 size_t cds_day_size(const cds_format_t *fmt);
 
@@ -159,7 +159,7 @@ size_t cds_day_size(const cds_format_t *fmt);
  *
  * @param[in] fmt Format to size.
  *
- * @return 0, 2 or 4 depending on the resolution, or 0 if @p fmt is NULL.
+ * @return 0, 2 or 4 depending on the resolution, or 0 if @p fmt is NULL or invalid.
  */
 size_t cds_subms_size(const cds_format_t *fmt);
 
@@ -168,7 +168,7 @@ size_t cds_subms_size(const cds_format_t *fmt);
  *
  * @param[in] fmt Format to size.
  *
- * @return T-field length in octets, or 0 if @p fmt is NULL.
+ * @return T-field length in octets, or 0 if @p fmt is NULL or invalid.
  */
 size_t cds_tfield_size(const cds_format_t *fmt);
 
@@ -177,7 +177,7 @@ size_t cds_tfield_size(const cds_format_t *fmt);
  *
  * @param[in] fmt Format to size.
  *
- * @return Total length in octets, or 0 if @p fmt is NULL.
+ * @return Total length in octets, or 0 if @p fmt is NULL or invalid.
  */
 size_t cds_size(const cds_format_t *fmt);
 
@@ -255,6 +255,11 @@ cds_status_t cds_tfield_decode(const uint8_t *buf,
 
 /**
  * @brief Encode a self-identified CDS code: P-field followed by T-field.
+ *
+ * @note On failure the contents of @p buf are unspecified, since the P-field may
+ *       already be written when the T-field stage rejects the value. Only a
+ *       #CDS_OK return sets @p written, so a caller that checks the status never
+ *       transmits a partial code.
  *
  * @param[in]  time    Time value to encode.
  * @param[in]  fmt     Format to encode.

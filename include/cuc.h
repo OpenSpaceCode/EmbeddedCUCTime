@@ -4,7 +4,6 @@
  *
  * Implements the CCSDS Unsegmented Time Code (CUC) as per
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.2.
- * See also: docs/ccsds_cuc.md
  *
  * A CUC time code is a pure binary count of a basic time unit (the second)
  * and a binary fraction of that unit, measured from a defined epoch. It is
@@ -132,7 +131,7 @@ cuc_status_t cuc_format_validate(const cuc_format_t *fmt);
  *
  * @param[in] fmt Format to size.
  *
- * @return 1 or 2 on success, or 0 if @p fmt is NULL.
+ * @return 1 or 2 on success, or 0 if @p fmt is NULL or invalid.
  */
 size_t cuc_pfield_size(const cuc_format_t *fmt);
 
@@ -141,7 +140,7 @@ size_t cuc_pfield_size(const cuc_format_t *fmt);
  *
  * @param[in] fmt Format to size.
  *
- * @return T-field length in octets, or 0 if @p fmt is NULL.
+ * @return T-field length in octets, or 0 if @p fmt is NULL or invalid.
  */
 size_t cuc_tfield_size(const cuc_format_t *fmt);
 
@@ -150,7 +149,7 @@ size_t cuc_tfield_size(const cuc_format_t *fmt);
  *
  * @param[in] fmt Format to size.
  *
- * @return Total length in octets, or 0 if @p fmt is NULL.
+ * @return Total length in octets, or 0 if @p fmt is NULL or invalid.
  */
 size_t cuc_size(const cuc_format_t *fmt);
 
@@ -227,6 +226,11 @@ cuc_status_t cuc_tfield_decode(const uint8_t *buf,
 
 /**
  * @brief Encode a self-identified CUC code: P-field followed by T-field.
+ *
+ * @note On failure the contents of @p buf are unspecified, since the P-field may
+ *       already be written when the T-field stage rejects the value. Only a
+ *       #CUC_OK return sets @p written, so a caller that checks the status never
+ *       transmits a partial code.
  *
  * @param[in]  time    Time value to encode.
  * @param[in]  fmt     Format to encode.

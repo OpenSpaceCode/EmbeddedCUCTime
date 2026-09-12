@@ -4,7 +4,6 @@
  *
  * Implements the CCSDS Unsegmented Time Code (CUC) as per
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.2.
- * See also: docs/ccsds_cuc.md
  *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
@@ -95,7 +94,7 @@ static bool cuc_format_is_extended(const cuc_format_t *fmt)
 
 size_t cuc_pfield_size(const cuc_format_t *fmt)
 {
-    if (!fmt)
+    if (cuc_format_validate(fmt) != CUC_OK)
     {
         return 0;
     }
@@ -105,7 +104,7 @@ size_t cuc_pfield_size(const cuc_format_t *fmt)
 
 size_t cuc_tfield_size(const cuc_format_t *fmt)
 {
-    if (!fmt)
+    if (cuc_format_validate(fmt) != CUC_OK)
     {
         return 0;
     }
