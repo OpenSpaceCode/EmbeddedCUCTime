@@ -94,7 +94,7 @@ static bool cuc_format_is_extended(const cuc_format_t *fmt)
 
 size_t cuc_pfield_size(const cuc_format_t *fmt)
 {
-    if (!fmt)
+    if (cuc_format_validate(fmt) != CUC_OK)
     {
         return 0;
     }
@@ -104,7 +104,7 @@ size_t cuc_pfield_size(const cuc_format_t *fmt)
 
 size_t cuc_tfield_size(const cuc_format_t *fmt)
 {
-    if (!fmt)
+    if (cuc_format_validate(fmt) != CUC_OK)
     {
         return 0;
     }

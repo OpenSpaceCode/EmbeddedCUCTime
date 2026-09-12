@@ -110,7 +110,7 @@ cds_status_t cds_format_validate(const cds_format_t *fmt)
 
 size_t cds_day_size(const cds_format_t *fmt)
 {
-    if (!fmt)
+    if (cds_format_validate(fmt) != CDS_OK)
     {
         return 0;
     }
@@ -119,7 +119,7 @@ size_t cds_day_size(const cds_format_t *fmt)
 
 size_t cds_subms_size(const cds_format_t *fmt)
 {
-    if (!fmt)
+    if (cds_format_validate(fmt) != CDS_OK)
     {
         return 0;
     }
@@ -136,7 +136,7 @@ size_t cds_subms_size(const cds_format_t *fmt)
 
 size_t cds_tfield_size(const cds_format_t *fmt)
 {
-    if (!fmt)
+    if (cds_format_validate(fmt) != CDS_OK)
     {
         return 0;
     }
@@ -145,11 +145,12 @@ size_t cds_tfield_size(const cds_format_t *fmt)
 
 size_t cds_size(const cds_format_t *fmt)
 {
-    if (!fmt)
+    size_t tfield = cds_tfield_size(fmt);
+    if (tfield == 0)
     {
         return 0;
     }
-    return CDS_PFIELD_OCTETS + cds_tfield_size(fmt);
+    return CDS_PFIELD_OCTETS + tfield;
 }
 
 cds_status_t cds_pfield_encode(const cds_format_t *fmt,

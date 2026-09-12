@@ -13,6 +13,7 @@
 #include "test_runners.h"
 
 #include <stdint.h>
+#include <string.h>
 
 /* 2024-02-29T12:34:56.78, month/day variation with one sub-second segment. Every
  * segment is BCD, so the octets read back as the decimal digits themselves. */

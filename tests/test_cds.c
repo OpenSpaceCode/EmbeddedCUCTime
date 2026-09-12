@@ -163,6 +163,14 @@ static int test_size_helpers(void)
 
     ASSERT_EQ_INT(0, (int)cds_size(NULL));
     ASSERT_EQ_INT(9, (int)cds_size(&us));
+
+    /* An invalid format has no defined length, so every helper reports 0 rather
+     * than a plausible-looking size. */
+    cds_format_t invalid = {CDS_EPOCH_CCSDS, CDS_DAY_16BIT, (cds_subms_t)3};
+    ASSERT_EQ_INT(0, (int)cds_day_size(&invalid));
+    ASSERT_EQ_INT(0, (int)cds_subms_size(&invalid));
+    ASSERT_EQ_INT(0, (int)cds_tfield_size(&invalid));
+    ASSERT_EQ_INT(0, (int)cds_size(&invalid));
     return 0;
 }
 

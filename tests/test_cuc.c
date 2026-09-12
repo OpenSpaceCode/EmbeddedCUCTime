@@ -169,6 +169,13 @@ static int test_size_helpers(void)
 
     ASSERT_EQ_INT(0, (int)cuc_size(NULL));
     ASSERT_EQ_INT(7, (int)cuc_size(&single));
+
+    /* An invalid format has no defined length, so every helper reports 0 rather
+     * than a plausible-looking size. */
+    cuc_format_t invalid = {CUC_EPOCH_CCSDS, CUC_BASIC_OCTETS_MAX + 1, 0};
+    ASSERT_EQ_INT(0, (int)cuc_pfield_size(&invalid));
+    ASSERT_EQ_INT(0, (int)cuc_tfield_size(&invalid));
+    ASSERT_EQ_INT(0, (int)cuc_size(&invalid));
     return 0;
 }
 

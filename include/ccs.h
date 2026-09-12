@@ -112,7 +112,7 @@ typedef enum
 typedef struct
 {
     ccs_variation_t variation;  /**< Calendar variation of the date segments. */
-    uint8_t subsecond_segments; /**< Sub-second segments, 0..6; segment n has weight 10^-2n s. */
+    uint8_t subsecond_segments; /**< Number of sub-second segments, 0..6; see #ccs_time_t. */
 } ccs_format_t;
 
 /**
@@ -281,6 +281,11 @@ ccs_status_t ccs_tfield_decode(const uint8_t *buf,
 
 /**
  * @brief Encode a self-identified CCS code: P-field followed by T-field.
+ *
+ * @note On failure the contents of @p buf are unspecified, since the P-field may
+ *       already be written when the T-field stage rejects the value. Only a
+ *       #CCS_OK return sets @p written, so a caller that checks the status never
+ *       transmits a partial code.
  *
  * @param[in]  time    Time value to encode.
  * @param[in]  fmt     Format to encode.
