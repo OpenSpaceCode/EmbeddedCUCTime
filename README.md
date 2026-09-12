@@ -21,7 +21,8 @@ microcontrollers.
 - **CCSDS 301.0-B-4** — *Time Code Formats*, Section 3.4 (CCSDS Calendar
   Segmented Time Code), with the segment ranges of annex A.
 
-The Blue Book itself is kept in [`docs/`](docs/301x0b4e1_time.pdf).
+The standard is published by the CCSDS and is not redistributed here; see the
+[References](#references) section.
 
 ## Features
 
@@ -81,8 +82,6 @@ EmbeddedCUCTime/
 │   ├── test_cuc.c           # Unit tests
 │   ├── test_cds.c
 │   └── test_ccs.c
-├── docs/
-│   └── 301x0b4e1_time.pdf   # CCSDS 301.0-B-4 Blue Book
 ├── tools/
 │   └── coverage-html.sh     # Coverage report helper
 ├── Makefile
