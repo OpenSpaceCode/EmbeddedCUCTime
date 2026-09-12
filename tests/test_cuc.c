@@ -300,6 +300,38 @@ static int test_encode_decode_errors(void)
     return 0;
 }
 
+/* A P-field may set the extension flag and then add nothing in its second octet
+ * (CCSDS 301.0-B-4, 3.2.2). The value decodes correctly and two octets are consumed,
+ * but the recovered format re-encodes into one, so cuc_size() is the shorter,
+ * canonical length. Callers stepping through concatenated codes must therefore
+ * advance by the consumed count, which this pins down. */
+static int test_redundant_pfield_consumes_more_than_size(void)
+{
+    uint8_t redundant[3] = {0x90, 0x00, 0x2A}; /* ext=1, id=001, basic=1, frac=0 */
+    cuc_format_t fmt = {0, 0, 0};
+    cuc_time_t time = {0, 0};
+    size_t consumed = 0;
+
+    ASSERT_EQ_INT(CUC_OK, cuc_decode(redundant, sizeof(redundant), &fmt, &time, &consumed));
+    ASSERT_EQ_INT(1, fmt.basic_octets);
+    ASSERT_EQ_INT(0, fmt.fraction_octets);
+    ASSERT_TRUE(time.seconds == 0x2Au);
+
+    ASSERT_EQ_INT(3, (int)consumed);       /* 2 P-field octets + 1 T-field octet */
+    ASSERT_EQ_INT(2, (int)cuc_size(&fmt)); /* canonical: 1 + 1 */
+    ASSERT_EQ_INT(1, (int)cuc_pfield_size(&fmt));
+    ASSERT_TRUE(consumed >= cuc_size(&fmt));
+
+    /* Re-encoding produces the canonical form and preserves the value. */
+    uint8_t out[CUC_OCTETS_MAX] = {0};
+    size_t written = 0;
+    ASSERT_EQ_INT(CUC_OK, cuc_encode(&time, &fmt, out, sizeof(out), &written));
+    ASSERT_EQ_INT(2, (int)written);
+    ASSERT_EQ_INT(0x10, out[0]); /* extension flag cleared */
+    ASSERT_EQ_INT(0x2A, out[1]);
+    return 0;
+}
+
 #ifndef CUC_NO_FLOAT
 static int test_seconds_conversion(void)
 {
@@ -322,6 +354,29 @@ static int test_seconds_conversion_edge(void)
     ASSERT_TRUE(z.fraction == 0u);
     return 0;
 }
+
+/* Inputs no CUC time can represent must be rejected rather than converted: casting
+ * them to uint64_t would be undefined behaviour. NaN is caught too, since it
+ * compares false against every bound. */
+static int test_seconds_conversion_unrepresentable(void)
+{
+    double two_pow_64 = 18446744073709551616.0;
+    double inf = 1.0 / 0.0;
+    double nan = inf - inf;
+    double cases[5] = {two_pow_64, two_pow_64 * 16.0, inf, -inf, nan};
+
+    for (unsigned i = 0; i < 5u; i++)
+    {
+        cuc_time_t t = cuc_time_from_seconds(cases[i]);
+        ASSERT_TRUE(t.seconds == 0u);
+        ASSERT_TRUE(t.fraction == 0u);
+    }
+
+    /* The largest double below 2^64 is still representable and must convert. */
+    cuc_time_t big = cuc_time_from_seconds(18446744073709549568.0);
+    ASSERT_TRUE(big.seconds == 18446744073709549568u);
+    return 0;
+}
 #endif
 
 test_result_t test_cuc_run_all(void)
@@ -339,9 +394,11 @@ test_result_t test_cuc_run_all(void)
     RUN_TEST(test_tfield_decode_errors);
     RUN_TEST(test_wide_fraction_roundtrip);
     RUN_TEST(test_encode_decode_errors);
+    RUN_TEST(test_redundant_pfield_consumes_more_than_size);
 #ifndef CUC_NO_FLOAT
     RUN_TEST(test_seconds_conversion);
     RUN_TEST(test_seconds_conversion_edge);
+    RUN_TEST(test_seconds_conversion_unrepresentable);
 #endif
 
     test_result_t r;

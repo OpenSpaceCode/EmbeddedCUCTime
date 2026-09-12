@@ -381,7 +381,11 @@ double cuc_time_to_seconds(const cuc_time_t *time)
 cuc_time_t cuc_time_from_seconds(double seconds)
 {
     cuc_time_t time = {0, 0};
-    if (seconds < 0.0)
+    /* Converting a double to uint64_t is undefined unless the truncated value fits,
+     * so reject negatives, NaN (every comparison with a NaN is false, hence the
+     * negated form) and anything that reaches 2^64. The seconds cast is then in
+     * range, and so is the fraction cast: the guard leaves frac in [0, 1). */
+    if ((!(seconds >= 0.0)) || (seconds >= CUC_TWO_POW_64))
     {
         return time;
     }
