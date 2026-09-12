@@ -129,6 +129,14 @@ cuc_status_t cuc_format_validate(const cuc_format_t *fmt);
 /**
  * @brief Number of P-field octets a format needs (1 or 2).
  *
+ * This is the length cuc_pfield_encode() produces: the shortest P-field able to
+ * describe @p fmt.
+ *
+ * @warning A received P-field may be longer than this. The standard allows a second
+ *          octet whose additional octet counts are both zero, which decodes to a
+ *          format that this function sizes at one octet. Never walk a buffer with
+ *          this value; use the @p consumed output of cuc_pfield_decode().
+ *
  * @param[in] fmt Format to size.
  *
  * @return 1 or 2 on success, or 0 if @p fmt is NULL or invalid.
@@ -146,6 +154,13 @@ size_t cuc_tfield_size(const cuc_format_t *fmt);
 
 /**
  * @brief Total octets of a self-identified code (P-field + T-field).
+ *
+ * This is the length cuc_encode() produces: the shortest self-identified code
+ * carrying @p fmt.
+ *
+ * @warning A received code may be one octet longer, for the redundant P-field
+ *          described on cuc_pfield_size(). To step through a stream of codes,
+ *          always use the @p consumed output of cuc_decode() rather than this.
  *
  * @param[in] fmt Format to size.
  *
@@ -250,6 +265,11 @@ cuc_status_t cuc_encode(const cuc_time_t *time,
 /**
  * @brief Decode a self-identified CUC code: parse the P-field, then the T-field.
  *
+ * @note @p consumed is the authoritative length of the code just read, and is what a
+ *       caller must advance by when codes are concatenated. It can exceed
+ *       cuc_size(@p fmt), which reports the shortest encoding of the recovered format
+ *       rather than the length actually on the wire.
+ *
  * @param[in]  buf      Input buffer positioned at the P-field.
  * @param[in]  buf_len  Number of octets available in @p buf.
  * @param[out] fmt      Receives the recovered format.
@@ -285,7 +305,8 @@ double cuc_time_to_seconds(const cuc_time_t *time);
  * @note Compile with -DCUC_NO_FLOAT to omit this on targets without an FPU;
  *       the core codec does not use floating point.
  *
- * @param[in] seconds Seconds since the epoch; negative values yield a zero time.
+ * @param[in] seconds Seconds since the epoch. Values that no CUC time can represent yield a
+ *                    zero time: negatives, NaN, and anything at or above 2^64 seconds.
  *
  * @return The equivalent CUC time value.
  */
