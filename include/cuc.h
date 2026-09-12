@@ -4,7 +4,6 @@
  *
  * Implements the CCSDS Unsegmented Time Code (CUC) as per
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.2.
- * See also: docs/ccsds_cuc.md
  *
  * A CUC time code is a pure binary count of a basic time unit (the second)
  * and a binary fraction of that unit, measured from a defined epoch. It is

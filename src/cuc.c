@@ -4,7 +4,6 @@
  *
  * Implements the CCSDS Unsegmented Time Code (CUC) as per
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.2.
- * See also: docs/ccsds_cuc.md
  *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
