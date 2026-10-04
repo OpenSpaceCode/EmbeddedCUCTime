@@ -106,9 +106,6 @@ make lib        # produces build/libcuc.a, build/libcds.a and build/libccs.a
 
 ```bash
 make example
-./build/examples/cuc_example
-./build/examples/cds_example
-./build/examples/ccs_example
 ```
 
 ### Run the tests

@@ -69,6 +69,9 @@ $(CTEST): tests/unit_tests.c tests/test_cuc.c tests/test_cds.c tests/test_ccs.c 
 	    $(CUC_SRC) $(CDS_SRC) $(CCS_SRC) -o $@
 
 example: $(EXAMPLES)
+	$(CUC_EXAMPLE)
+	$(CDS_EXAMPLE)
+	$(CCS_EXAMPLE)
 
 $(CUC_EXAMPLE): examples/cuc_example.c $(CUC_SRC) $(CUC_HDR)
 	mkdir -p $(dir $@)
