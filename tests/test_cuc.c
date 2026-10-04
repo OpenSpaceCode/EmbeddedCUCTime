@@ -13,6 +13,7 @@
 #include "test_runners.h"
 
 #include <stdint.h>
+#include <string.h>
 
 /* A common configuration: 4 basic octets + 2 fractional octets, CCSDS epoch.
  * P-field octet 1 = ext(0) id(001) basic-1(011) frac(10) = 0001 1110 = 0x1E. */
@@ -379,6 +380,57 @@ static int test_seconds_conversion_unrepresentable(void)
 }
 #endif
 
+/* Validate First, Write After: a rejected call leaves every output exactly as the caller
+ * passed it, so a partially decoded format or a half-written code never reaches the caller.
+ * The 0x5A fill makes any stray write visible. */
+static int test_outputs_untouched_on_failure(void)
+{
+    cuc_format_t fmt = {(cuc_epoch_t)0x5A, 0x5Au, 0x5Au};
+    cuc_time_t time = {0x5A5A5A5A5A5A5A5Au, 0xA5A5A5A5A5A5A5A5u};
+    size_t len = 0x5A5Au;
+
+    /* Extension flag set in octet 1, but octet 2 is missing. */
+    uint8_t truncated[1] = {0x90};
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_pfield_decode(truncated, 1, &fmt, &len));
+    /* Octet 2 requests a third octet, which this library does not define. */
+    uint8_t third_octet[2] = {0x90, 0x80};
+    ASSERT_EQ_INT(CUC_ERR_UNSUPPORTED, cuc_pfield_decode(third_octet, 2, &fmt, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.epoch);
+    ASSERT_EQ_INT(0x5A, fmt.basic_octets);
+    ASSERT_EQ_INT(0x5A, fmt.fraction_octets);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    /* Valid P-field, but the T-field it announces is not present. */
+    uint8_t pfield_only[1] = {0x1E};
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_decode(pfield_only, 1, &fmt, &time, &len));
+    ASSERT_EQ_INT(0x5A, fmt.basic_octets);
+    ASSERT_TRUE(time.seconds == 0x5A5A5A5A5A5A5A5Au);
+    ASSERT_TRUE(time.fraction == 0xA5A5A5A5A5A5A5A5u);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    /* Encode with room for the P-field but not the whole code: no octet is written. */
+    cuc_format_t valid = {CUC_EPOCH_CCSDS, 4, 2};
+    cuc_format_t invalid = {CUC_EPOCH_CCSDS, CUC_BASIC_OCTETS_MAX + 1, 0};
+    cuc_time_t t = {1u, 0u};
+    uint8_t buf[CUC_OCTETS_MAX];
+    uint8_t untouched[CUC_OCTETS_MAX];
+    memset(buf, 0x5A, sizeof(buf));
+    memset(untouched, 0x5A, sizeof(untouched));
+    size_t written = 0x5A5Au;
+
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_encode(&t, &valid, buf, 2, &written));
+    ASSERT_EQ_INT(CUC_ERR_FORMAT, cuc_encode(&t, &invalid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_encode(NULL, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_encode(&t, &valid, NULL, sizeof(buf), &written));
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_encode(&t, &valid, buf, sizeof(buf), NULL));
+    ASSERT_EQ_MEM(untouched, buf, sizeof(buf));
+    ASSERT_TRUE(written == 0x5A5Au);
+
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_decode(pfield_only, 1, NULL, &time, &len));
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_decode(pfield_only, 1, &fmt, NULL, &len));
+    return 0;
+}
+
 test_result_t test_cuc_run_all(void)
 {
     RUN_TEST(test_pfield_single_octet);
@@ -394,6 +446,7 @@ test_result_t test_cuc_run_all(void)
     RUN_TEST(test_tfield_decode_errors);
     RUN_TEST(test_wide_fraction_roundtrip);
     RUN_TEST(test_encode_decode_errors);
+    RUN_TEST(test_outputs_untouched_on_failure);
     RUN_TEST(test_redundant_pfield_consumes_more_than_size);
 #ifndef CUC_NO_FLOAT
     RUN_TEST(test_seconds_conversion);

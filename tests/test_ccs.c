@@ -435,6 +435,67 @@ static int test_encode_decode_errors(void)
     return 0;
 }
 
+/* Validate First, Write After: a rejected call leaves every output exactly as the caller
+ * passed it. The 0x5A fill makes any stray write visible. */
+static int test_outputs_untouched_on_failure(void)
+{
+    ccs_format_t fmt = {(ccs_variation_t)0x5A, 0x5Au};
+    ccs_time_t time = {0x5A5Au,
+                       0x5Au,
+                       0x5Au,
+                       0x5A5Au,
+                       0x5Au,
+                       0x5Au,
+                       0x5Au,
+                       {0x5Au, 0x5Au, 0x5Au, 0x5Au, 0x5Au, 0x5Au}};
+    size_t len = 0x5A5Au;
+
+    /* Resolution bits '111' are not used, so the whole P-field is rejected. */
+    uint8_t unused_resolution[1] = {0x57};
+    ASSERT_EQ_INT(CCS_ERR_FORMAT, ccs_pfield_decode(unused_resolution, 1, &fmt, &len));
+    /* The extension flag announces a second P-field octet, which CCS does not define. */
+    uint8_t extended[1] = {0xD1};
+    ASSERT_EQ_INT(CCS_ERR_UNSUPPORTED, ccs_pfield_decode(extended, 1, &fmt, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.variation);
+    ASSERT_EQ_INT(0x5A, fmt.subsecond_segments);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    /* Valid P-field, but the T-field it announces is not present. */
+    uint8_t pfield_only[1] = {0x51};
+    ASSERT_EQ_INT(CCS_ERR_BUFFER, ccs_decode(pfield_only, 1, &fmt, &time, &len));
+    /* A full code whose seconds segment is not valid BCD. */
+    uint8_t bad_bcd[9] = {0x51, 0x20, 0x24, 0x02, 0x29, 0x12, 0x34, 0x5F, 0x78};
+    ASSERT_EQ_INT(CCS_ERR_BCD, ccs_decode(bad_bcd, sizeof(bad_bcd), &fmt, &time, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.variation);
+    ASSERT_TRUE(time.year == 0x5A5Au);
+    ASSERT_TRUE(time.second == 0x5Au);
+    ASSERT_TRUE(time.subseconds[0] == 0x5Au);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    ccs_format_t valid = {CCS_VARIATION_MONTH_DAY, 1u};
+    ccs_format_t invalid = {CCS_VARIATION_MONTH_DAY, CCS_SUBSECOND_SEGMENTS_MAX + 1u};
+    ccs_time_t out_of_range = leap_day;
+    out_of_range.day = 30u; /* February never has 30 days */
+    uint8_t buf[CCS_OCTETS_MAX];
+    uint8_t untouched[CCS_OCTETS_MAX];
+    memset(buf, 0x5A, sizeof(buf));
+    memset(untouched, 0x5A, sizeof(untouched));
+    size_t written = 0x5A5Au;
+
+    ASSERT_EQ_INT(CCS_ERR_BUFFER, ccs_encode(&leap_day, &valid, buf, 2, &written));
+    ASSERT_EQ_INT(CCS_ERR_FORMAT, ccs_encode(&leap_day, &invalid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CCS_ERR_FORMAT, ccs_encode(&out_of_range, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_encode(NULL, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_encode(&leap_day, &valid, NULL, sizeof(buf), &written));
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_encode(&leap_day, &valid, buf, sizeof(buf), NULL));
+    ASSERT_EQ_MEM(untouched, buf, sizeof(buf));
+    ASSERT_TRUE(written == 0x5A5Au);
+
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_decode(pfield_only, 1, NULL, &time, &len));
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_decode(pfield_only, 1, &fmt, NULL, &len));
+    return 0;
+}
+
 test_result_t test_ccs_run_all(void)
 {
     RUN_TEST(test_pfield_month_day);
@@ -454,6 +515,7 @@ test_result_t test_ccs_run_all(void)
     RUN_TEST(test_tfield_decode_errors);
     RUN_TEST(test_tfield_decode_bcd_errors);
     RUN_TEST(test_encode_decode_errors);
+    RUN_TEST(test_outputs_untouched_on_failure);
 
     test_result_t r;
     r.total = cunit_total_tests;

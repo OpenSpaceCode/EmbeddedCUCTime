@@ -13,6 +13,7 @@
 #include "test_runners.h"
 
 #include <stdint.h>
+#include <string.h>
 
 /* {CCSDS epoch, 16-bit day, microsecond sub-ms}:
  * P-field = ext(0) id(100) epoch(0) day(0) subms(01) = 0100 0001 = 0x41. */
@@ -277,6 +278,54 @@ static int test_encode_decode_errors(void)
     return 0;
 }
 
+/* Validate First, Write After: a rejected call leaves every output exactly as the caller
+ * passed it. The 0x5A fill makes any stray write visible. */
+static int test_outputs_untouched_on_failure(void)
+{
+    cds_format_t fmt = {(cds_epoch_t)0x5A, (cds_day_length_t)0x5A, (cds_subms_t)0x5A};
+    cds_time_t time = {0x5A5A5A5Au, 0x5A5A5A5Au, 0xA5A5A5A5u};
+    size_t len = 0x5A5Au;
+
+    /* Sub-millisecond bits '11' are reserved, so the whole P-field is rejected. */
+    uint8_t reserved[1] = {0x43};
+    ASSERT_EQ_INT(CDS_ERR_FORMAT, cds_pfield_decode(reserved, 1, &fmt, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.epoch);
+    ASSERT_EQ_INT(0x5A, (int)fmt.day_length);
+    ASSERT_EQ_INT(0x5A, (int)fmt.submillisecond);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    /* Valid P-field, but the T-field it announces is not present. */
+    uint8_t pfield_only[1] = {0x41};
+    ASSERT_EQ_INT(CDS_ERR_BUFFER, cds_decode(pfield_only, 1, &fmt, &time, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.epoch);
+    ASSERT_TRUE(time.days == 0x5A5A5A5Au);
+    ASSERT_TRUE(time.submilliseconds == 0xA5A5A5A5u);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    cds_format_t valid = {CDS_EPOCH_CCSDS, CDS_DAY_16BIT, CDS_SUBMS_US};
+    cds_format_t invalid = {CDS_EPOCH_CCSDS, CDS_DAY_16BIT, (cds_subms_t)3};
+    cds_time_t t = {1u, 0u, 0u};
+    cds_time_t out_of_range = {0x10000u, 0u, 0u}; /* beyond the 16-bit day segment */
+    uint8_t buf[CDS_OCTETS_MAX];
+    uint8_t untouched[CDS_OCTETS_MAX];
+    memset(buf, 0x5A, sizeof(buf));
+    memset(untouched, 0x5A, sizeof(untouched));
+    size_t written = 0x5A5Au;
+
+    ASSERT_EQ_INT(CDS_ERR_BUFFER, cds_encode(&t, &valid, buf, 2, &written));
+    ASSERT_EQ_INT(CDS_ERR_FORMAT, cds_encode(&t, &invalid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CDS_ERR_FORMAT, cds_encode(&out_of_range, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_encode(NULL, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_encode(&t, &valid, NULL, sizeof(buf), &written));
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_encode(&t, &valid, buf, sizeof(buf), NULL));
+    ASSERT_EQ_MEM(untouched, buf, sizeof(buf));
+    ASSERT_TRUE(written == 0x5A5Au);
+
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_decode(pfield_only, 1, NULL, &time, &len));
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_decode(pfield_only, 1, &fmt, NULL, &len));
+    return 0;
+}
+
 test_result_t test_cds_run_all(void)
 {
     RUN_TEST(test_pfield_microsecond);
@@ -291,6 +340,7 @@ test_result_t test_cds_run_all(void)
     RUN_TEST(test_tfield_encode_errors);
     RUN_TEST(test_tfield_decode_errors);
     RUN_TEST(test_encode_decode_errors);
+    RUN_TEST(test_outputs_untouched_on_failure);
 
     test_result_t r;
     r.total = cunit_total_tests;

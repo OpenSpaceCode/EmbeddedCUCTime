@@ -187,6 +187,8 @@ cuc_status_t cuc_pfield_encode(const cuc_format_t *fmt,
 /**
  * @brief Decode a P-field into a format.
  *
+ * @note On failure @p fmt and @p consumed are left unchanged.
+ *
  * @param[in]  buf      Input buffer positioned at the P-field.
  * @param[in]  buf_len  Number of octets available in @p buf.
  * @param[out] fmt      Receives the decoded format.
@@ -242,10 +244,9 @@ cuc_status_t cuc_tfield_decode(const uint8_t *buf,
 /**
  * @brief Encode a self-identified CUC code: P-field followed by T-field.
  *
- * @note On failure the contents of @p buf are unspecified, since the P-field may
- *       already be written when the T-field stage rejects the value. Only a
- *       #CUC_OK return sets @p written, so a caller that checks the status never
- *       transmits a partial code.
+ * @note On failure @p buf and @p written are left unchanged: the code is assembled in a
+ *       local buffer and copied out only once every stage has succeeded and the total
+ *       length is known to fit.
  *
  * @param[in]  time    Time value to encode.
  * @param[in]  fmt     Format to encode.
@@ -264,6 +265,9 @@ cuc_status_t cuc_encode(const cuc_time_t *time,
 
 /**
  * @brief Decode a self-identified CUC code: parse the P-field, then the T-field.
+ *
+ * @note On failure @p fmt, @p time and @p consumed are left unchanged; the code is
+ *       decoded into locals and committed only once every check has passed.
  *
  * @note @p consumed is the authoritative length of the code just read, and is what a
  *       caller must advance by when codes are concatenated. It can exceed
