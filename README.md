@@ -139,7 +139,7 @@ Minimal CUC setup (from `examples/cuc_example.c`):
 #include "cuc.h"
 
 cuc_format_t fmt = {CUC_EPOCH_CCSDS, 4, 2};
-cuc_time_t time = cuc_time_from_seconds(1234567.25);
+cuc_time_t time = {UINT64_C(1234567), UINT64_C(1) << 62};
 
 uint8_t buf[CUC_OCTETS_MAX];
 size_t written = 0;
