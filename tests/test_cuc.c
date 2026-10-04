@@ -13,6 +13,7 @@
 #include "test_runners.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* A common configuration: 4 basic octets + 2 fractional octets, CCSDS epoch.
@@ -431,6 +432,82 @@ static int test_outputs_untouched_on_failure(void)
     return 0;
 }
 
+/* Buffer-size boundaries. Exact-size heap allocations make a one-octet overrun or
+ * over-read visible to ASan instead of landing in slack space, and the sizes are derived
+ * from cuc_size()/cuc_tfield_size() rather than hard-coded. */
+static int test_buffer_size_boundaries(void)
+{
+    cuc_format_t fmt = {CUC_EPOCH_CCSDS, 4, 2};
+    cuc_time_t in = {0x12345678u, UINT64_C(1) << 62};
+    size_t need = cuc_size(&fmt);
+    size_t t_need = cuc_tfield_size(&fmt);
+    ASSERT_EQ_INT(7, (int)need);
+    ASSERT_EQ_INT(6, (int)t_need);
+
+    /* Exactly the required size succeeds. */
+    uint8_t *exact = malloc(need);
+    size_t written = 0;
+    ASSERT_TRUE(exact);
+    ASSERT_EQ_INT(CUC_OK, cuc_encode(&in, &fmt, exact, need, &written));
+    ASSERT_TRUE(written == need);
+
+    /* Every length shorter than the requirement is rejected with nothing written. */
+    for (size_t len = 0; len < need; len++)
+    {
+        size_t alloc = (len > 0u) ? len : 1u;
+        uint8_t *shortbuf = malloc(alloc);
+        uint8_t *ref = malloc(alloc);
+        ASSERT_TRUE(shortbuf);
+        ASSERT_TRUE(ref);
+        memset(shortbuf, 0x5A, alloc);
+        memset(ref, 0x5A, alloc);
+        size_t w = 0x5A5Au;
+        ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_encode(&in, &fmt, shortbuf, len, &w));
+        ASSERT_EQ_MEM(ref, shortbuf, alloc);
+        ASSERT_TRUE(w == 0x5A5Au);
+        free(shortbuf);
+        free(ref);
+    }
+
+    /* Decoding the exact-size code succeeds and consumes all of it. */
+    cuc_format_t out_fmt;
+    cuc_time_t out;
+    size_t consumed = 0;
+    ASSERT_EQ_INT(CUC_OK, cuc_decode(exact, need, &out_fmt, &out, &consumed));
+    ASSERT_TRUE(consumed == need);
+
+    /* Every truncation of that code is rejected; the input buffer is sized to the
+     * truncated length so any over-read is caught. */
+    for (size_t len = 0; len < need; len++)
+    {
+        size_t alloc = (len > 0u) ? len : 1u;
+        uint8_t *truncated = malloc(alloc);
+        ASSERT_TRUE(truncated);
+        memcpy(truncated, exact, len);
+        ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_decode(truncated, len, &out_fmt, &out, &consumed));
+        free(truncated);
+    }
+
+    /* The same boundary on the T-field codec, which carries its own length check. */
+    uint8_t *t_exact = malloc(t_need);
+    uint8_t *t_short = malloc(t_need - 1u);
+    ASSERT_TRUE(t_exact);
+    ASSERT_TRUE(t_short);
+    written = 0;
+    ASSERT_EQ_INT(CUC_OK, cuc_tfield_encode(&in, &fmt, t_exact, t_need, &written));
+    ASSERT_TRUE(written == t_need);
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_tfield_encode(&in, &fmt, t_short, t_need - 1u, &written));
+    consumed = 0;
+    ASSERT_EQ_INT(CUC_OK, cuc_tfield_decode(t_exact, t_need, &fmt, &out, &consumed));
+    ASSERT_TRUE(consumed == t_need);
+    memcpy(t_short, t_exact, t_need - 1u);
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_tfield_decode(t_short, t_need - 1u, &fmt, &out, &consumed));
+    free(t_exact);
+    free(t_short);
+    free(exact);
+    return 0;
+}
+
 test_result_t test_cuc_run_all(void)
 {
     RUN_TEST(test_pfield_single_octet);
@@ -447,6 +524,7 @@ test_result_t test_cuc_run_all(void)
     RUN_TEST(test_wide_fraction_roundtrip);
     RUN_TEST(test_encode_decode_errors);
     RUN_TEST(test_outputs_untouched_on_failure);
+    RUN_TEST(test_buffer_size_boundaries);
     RUN_TEST(test_redundant_pfield_consumes_more_than_size);
 #ifndef CUC_NO_FLOAT
     RUN_TEST(test_seconds_conversion);
