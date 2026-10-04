@@ -111,7 +111,7 @@ make example
 ### Run the tests
 
 ```bash
-make run        # or: make ctest && ./build/tests/ctest
+make test       # or: make ctest && ./build/tests/ctest
 ```
 
 ### Sanitizers
