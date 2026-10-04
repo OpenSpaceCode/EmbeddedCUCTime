@@ -133,7 +133,23 @@ make clean
 
 ## Quick Start
 
-See the examples.
+Minimal CUC setup (from `examples/cuc_example.c`):
+
+```c
+#include "cuc.h"
+
+cuc_format_t fmt = {CUC_EPOCH_CCSDS, 4, 2};
+cuc_time_t time = cuc_time_from_seconds(1234567.25);
+
+uint8_t buf[CUC_OCTETS_MAX];
+size_t written = 0;
+if (cuc_encode(&time, &fmt, buf, sizeof(buf), &written) != CUC_OK)
+{
+    /* handle error */
+}
+```
+
+See `examples/cuc_example.c` for a full encode/decode flow.
 
 ## Memory Usage
 
