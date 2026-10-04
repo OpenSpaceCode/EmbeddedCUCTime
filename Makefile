@@ -85,7 +85,7 @@ $(CCS_EXAMPLE): examples/ccs_example.c $(CCS_SRC) $(CCS_HDR)
 	mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) $(OPT) -Iinclude examples/ccs_example.c $(CCS_SRC) -o $@
 
-run: $(CTEST)
+test: $(CTEST)
 	$(CTEST)
 
 # Instrumented rebuild; program output is shown only on failure and the build is removed
@@ -121,4 +121,4 @@ coverage-html:
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all lib ctest example run sanitize coverage-html clean
+.PHONY: all lib ctest example test sanitize coverage-html clean
