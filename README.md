@@ -147,6 +147,14 @@ if (cuc_encode(&time, &fmt, buf, sizeof(buf), &written) != CUC_OK)
 {
     /* handle error */
 }
+
+cuc_format_t decoded_fmt;
+cuc_time_t decoded;
+size_t consumed = 0;
+if (cuc_decode(buf, written, &decoded_fmt, &decoded, &consumed) != CUC_OK)
+{
+    /* handle error */
+}
 ```
 
 See `examples/cuc_example.c` for a full encode/decode flow.
