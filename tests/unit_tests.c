@@ -1,3 +1,7 @@
+/* Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "test_runners.h"
 
 #include <stdio.h>

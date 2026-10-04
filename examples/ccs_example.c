@@ -5,6 +5,9 @@
  * Encodes a calendar date and time of day into a self-identified CCS code and
  * decodes it back, printing the octets. Demonstrates CCSDS 301.0-B-4, 3.4.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 

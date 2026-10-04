@@ -5,6 +5,9 @@
  * Exercises the P-field / T-field codecs against the encodings defined in
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.2.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 

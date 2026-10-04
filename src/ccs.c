@@ -5,6 +5,9 @@
  * Implements the CCSDS Calendar Segmented Time Code (CCS) as per
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.4.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -501,7 +504,7 @@ ccs_status_t ccs_tfield_decode(const uint8_t *buf,
     }
 
     /* Decode into a local so a malformed segment cannot leave *time half written. */
-    ccs_time_t decoded = {0};
+    ccs_time_t decoded = {0, 0, 0, 0, 0, 0, 0, {0, 0, 0, 0, 0, 0}};
     status = ccs_decode_date(buf, fmt, &decoded);
     if (status != CCS_OK)
     {

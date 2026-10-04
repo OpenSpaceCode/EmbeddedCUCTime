@@ -10,6 +10,9 @@
  * cuc_time_to_seconds() / cuc_time_from_seconds() helpers are deliberately
  * unused here.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 

@@ -13,6 +13,9 @@
  * is carried in a TIME SPECIFICATION FIELD (T-field) preceded by a one-octet
  * TIME CODE PREAMBLE FIELD (P-field) describing its structure.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
