@@ -5,6 +5,9 @@
  * Exercises the P-field / T-field codecs against the encodings defined in
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.2.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -13,6 +16,8 @@
 #include "test_runners.h"
 
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* A common configuration: 4 basic octets + 2 fractional octets, CCSDS epoch.
  * P-field octet 1 = ext(0) id(001) basic-1(011) frac(10) = 0001 1110 = 0x1E. */
@@ -379,6 +384,133 @@ static int test_seconds_conversion_unrepresentable(void)
 }
 #endif
 
+/* Validate First, Write After: a rejected call leaves every output exactly as the caller
+ * passed it, so a partially decoded format or a half-written code never reaches the caller.
+ * The 0x5A fill makes any stray write visible. */
+static int test_outputs_untouched_on_failure(void)
+{
+    cuc_format_t fmt = {(cuc_epoch_t)0x5A, 0x5Au, 0x5Au};
+    cuc_time_t time = {0x5A5A5A5A5A5A5A5Au, 0xA5A5A5A5A5A5A5A5u};
+    size_t len = 0x5A5Au;
+
+    /* Extension flag set in octet 1, but octet 2 is missing. */
+    uint8_t truncated[1] = {0x90};
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_pfield_decode(truncated, 1, &fmt, &len));
+    /* Octet 2 requests a third octet, which this library does not define. */
+    uint8_t third_octet[2] = {0x90, 0x80};
+    ASSERT_EQ_INT(CUC_ERR_UNSUPPORTED, cuc_pfield_decode(third_octet, 2, &fmt, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.epoch);
+    ASSERT_EQ_INT(0x5A, fmt.basic_octets);
+    ASSERT_EQ_INT(0x5A, fmt.fraction_octets);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    /* Valid P-field, but the T-field it announces is not present. */
+    uint8_t pfield_only[1] = {0x1E};
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_decode(pfield_only, 1, &fmt, &time, &len));
+    ASSERT_EQ_INT(0x5A, fmt.basic_octets);
+    ASSERT_TRUE(time.seconds == 0x5A5A5A5A5A5A5A5Au);
+    ASSERT_TRUE(time.fraction == 0xA5A5A5A5A5A5A5A5u);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    /* Encode with room for the P-field but not the whole code: no octet is written. */
+    cuc_format_t valid = {CUC_EPOCH_CCSDS, 4, 2};
+    cuc_format_t invalid = {CUC_EPOCH_CCSDS, CUC_BASIC_OCTETS_MAX + 1, 0};
+    cuc_time_t t = {1u, 0u};
+    uint8_t buf[CUC_OCTETS_MAX];
+    uint8_t untouched[CUC_OCTETS_MAX];
+    memset(buf, 0x5A, sizeof(buf));
+    memset(untouched, 0x5A, sizeof(untouched));
+    size_t written = 0x5A5Au;
+
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_encode(&t, &valid, buf, 2, &written));
+    ASSERT_EQ_INT(CUC_ERR_FORMAT, cuc_encode(&t, &invalid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_encode(NULL, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_encode(&t, &valid, NULL, sizeof(buf), &written));
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_encode(&t, &valid, buf, sizeof(buf), NULL));
+    ASSERT_EQ_MEM(untouched, buf, sizeof(buf));
+    ASSERT_TRUE(written == 0x5A5Au);
+
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_decode(pfield_only, 1, NULL, &time, &len));
+    ASSERT_EQ_INT(CUC_ERR_NULL, cuc_decode(pfield_only, 1, &fmt, NULL, &len));
+    return 0;
+}
+
+/* Buffer-size boundaries. Exact-size heap allocations make a one-octet overrun or
+ * over-read visible to ASan instead of landing in slack space, and the sizes are derived
+ * from cuc_size()/cuc_tfield_size() rather than hard-coded. */
+static int test_buffer_size_boundaries(void)
+{
+    cuc_format_t fmt = {CUC_EPOCH_CCSDS, 4, 2};
+    cuc_time_t in = {0x12345678u, UINT64_C(1) << 62};
+    size_t need = cuc_size(&fmt);
+    size_t t_need = cuc_tfield_size(&fmt);
+    ASSERT_EQ_INT(7, (int)need);
+    ASSERT_EQ_INT(6, (int)t_need);
+
+    /* Exactly the required size succeeds. */
+    uint8_t *exact = malloc(need);
+    size_t written = 0;
+    ASSERT_TRUE(exact);
+    ASSERT_EQ_INT(CUC_OK, cuc_encode(&in, &fmt, exact, need, &written));
+    ASSERT_TRUE(written == need);
+
+    /* Every length shorter than the requirement is rejected with nothing written. */
+    for (size_t len = 0; len < need; len++)
+    {
+        size_t alloc = (len > 0u) ? len : 1u;
+        uint8_t *shortbuf = malloc(alloc);
+        uint8_t *ref = malloc(alloc);
+        ASSERT_TRUE(shortbuf);
+        ASSERT_TRUE(ref);
+        memset(shortbuf, 0x5A, alloc);
+        memset(ref, 0x5A, alloc);
+        size_t w = 0x5A5Au;
+        ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_encode(&in, &fmt, shortbuf, len, &w));
+        ASSERT_EQ_MEM(ref, shortbuf, alloc);
+        ASSERT_TRUE(w == 0x5A5Au);
+        free(shortbuf);
+        free(ref);
+    }
+
+    /* Decoding the exact-size code succeeds and consumes all of it. */
+    cuc_format_t out_fmt;
+    cuc_time_t out;
+    size_t consumed = 0;
+    ASSERT_EQ_INT(CUC_OK, cuc_decode(exact, need, &out_fmt, &out, &consumed));
+    ASSERT_TRUE(consumed == need);
+
+    /* Every truncation of that code is rejected; the input buffer is sized to the
+     * truncated length so any over-read is caught. */
+    for (size_t len = 0; len < need; len++)
+    {
+        size_t alloc = (len > 0u) ? len : 1u;
+        uint8_t *truncated = malloc(alloc);
+        ASSERT_TRUE(truncated);
+        memcpy(truncated, exact, len);
+        ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_decode(truncated, len, &out_fmt, &out, &consumed));
+        free(truncated);
+    }
+
+    /* The same boundary on the T-field codec, which carries its own length check. */
+    uint8_t *t_exact = malloc(t_need);
+    uint8_t *t_short = malloc(t_need - 1u);
+    ASSERT_TRUE(t_exact);
+    ASSERT_TRUE(t_short);
+    written = 0;
+    ASSERT_EQ_INT(CUC_OK, cuc_tfield_encode(&in, &fmt, t_exact, t_need, &written));
+    ASSERT_TRUE(written == t_need);
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_tfield_encode(&in, &fmt, t_short, t_need - 1u, &written));
+    consumed = 0;
+    ASSERT_EQ_INT(CUC_OK, cuc_tfield_decode(t_exact, t_need, &fmt, &out, &consumed));
+    ASSERT_TRUE(consumed == t_need);
+    memcpy(t_short, t_exact, t_need - 1u);
+    ASSERT_EQ_INT(CUC_ERR_BUFFER, cuc_tfield_decode(t_short, t_need - 1u, &fmt, &out, &consumed));
+    free(t_exact);
+    free(t_short);
+    free(exact);
+    return 0;
+}
+
 test_result_t test_cuc_run_all(void)
 {
     RUN_TEST(test_pfield_single_octet);
@@ -394,6 +526,8 @@ test_result_t test_cuc_run_all(void)
     RUN_TEST(test_tfield_decode_errors);
     RUN_TEST(test_wide_fraction_roundtrip);
     RUN_TEST(test_encode_decode_errors);
+    RUN_TEST(test_outputs_untouched_on_failure);
+    RUN_TEST(test_buffer_size_boundaries);
     RUN_TEST(test_redundant_pfield_consumes_more_than_size);
 #ifndef CUC_NO_FLOAT
     RUN_TEST(test_seconds_conversion);

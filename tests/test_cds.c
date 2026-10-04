@@ -5,6 +5,9 @@
  * Exercises the P-field / T-field codecs against the encodings defined in
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.3.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -13,6 +16,8 @@
 #include "test_runners.h"
 
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* {CCSDS epoch, 16-bit day, microsecond sub-ms}:
  * P-field = ext(0) id(100) epoch(0) day(0) subms(01) = 0100 0001 = 0x41. */
@@ -277,6 +282,130 @@ static int test_encode_decode_errors(void)
     return 0;
 }
 
+/* Validate First, Write After: a rejected call leaves every output exactly as the caller
+ * passed it. The 0x5A fill makes any stray write visible. */
+static int test_outputs_untouched_on_failure(void)
+{
+    cds_format_t fmt = {(cds_epoch_t)0x5A, (cds_day_length_t)0x5A, (cds_subms_t)0x5A};
+    cds_time_t time = {0x5A5A5A5Au, 0x5A5A5A5Au, 0xA5A5A5A5u};
+    size_t len = 0x5A5Au;
+
+    /* Sub-millisecond bits '11' are reserved, so the whole P-field is rejected. */
+    uint8_t reserved[1] = {0x43};
+    ASSERT_EQ_INT(CDS_ERR_FORMAT, cds_pfield_decode(reserved, 1, &fmt, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.epoch);
+    ASSERT_EQ_INT(0x5A, (int)fmt.day_length);
+    ASSERT_EQ_INT(0x5A, (int)fmt.submillisecond);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    /* Valid P-field, but the T-field it announces is not present. */
+    uint8_t pfield_only[1] = {0x41};
+    ASSERT_EQ_INT(CDS_ERR_BUFFER, cds_decode(pfield_only, 1, &fmt, &time, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.epoch);
+    ASSERT_TRUE(time.days == 0x5A5A5A5Au);
+    ASSERT_TRUE(time.submilliseconds == 0xA5A5A5A5u);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    cds_format_t valid = {CDS_EPOCH_CCSDS, CDS_DAY_16BIT, CDS_SUBMS_US};
+    cds_format_t invalid = {CDS_EPOCH_CCSDS, CDS_DAY_16BIT, (cds_subms_t)3};
+    cds_time_t t = {1u, 0u, 0u};
+    cds_time_t out_of_range = {0x10000u, 0u, 0u}; /* beyond the 16-bit day segment */
+    uint8_t buf[CDS_OCTETS_MAX];
+    uint8_t untouched[CDS_OCTETS_MAX];
+    memset(buf, 0x5A, sizeof(buf));
+    memset(untouched, 0x5A, sizeof(untouched));
+    size_t written = 0x5A5Au;
+
+    ASSERT_EQ_INT(CDS_ERR_BUFFER, cds_encode(&t, &valid, buf, 2, &written));
+    ASSERT_EQ_INT(CDS_ERR_FORMAT, cds_encode(&t, &invalid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CDS_ERR_FORMAT, cds_encode(&out_of_range, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_encode(NULL, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_encode(&t, &valid, NULL, sizeof(buf), &written));
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_encode(&t, &valid, buf, sizeof(buf), NULL));
+    ASSERT_EQ_MEM(untouched, buf, sizeof(buf));
+    ASSERT_TRUE(written == 0x5A5Au);
+
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_decode(pfield_only, 1, NULL, &time, &len));
+    ASSERT_EQ_INT(CDS_ERR_NULL, cds_decode(pfield_only, 1, &fmt, NULL, &len));
+    return 0;
+}
+
+/* Buffer-size boundaries. Exact-size heap allocations make a one-octet overrun or
+ * over-read visible to ASan instead of landing in slack space, and the sizes are derived
+ * from cds_size()/cds_tfield_size() rather than hard-coded. */
+static int test_buffer_size_boundaries(void)
+{
+    cds_format_t fmt = {CDS_EPOCH_CCSDS, CDS_DAY_16BIT, CDS_SUBMS_US};
+    cds_time_t in = {20000u, 45296789u, 123u};
+    size_t need = cds_size(&fmt);
+    size_t t_need = cds_tfield_size(&fmt);
+    ASSERT_EQ_INT(9, (int)need);
+    ASSERT_EQ_INT(8, (int)t_need);
+
+    /* Exactly the required size succeeds. */
+    uint8_t *exact = malloc(need);
+    size_t written = 0;
+    ASSERT_TRUE(exact);
+    ASSERT_EQ_INT(CDS_OK, cds_encode(&in, &fmt, exact, need, &written));
+    ASSERT_TRUE(written == need);
+
+    /* Every length shorter than the requirement is rejected with nothing written. */
+    for (size_t len = 0; len < need; len++)
+    {
+        size_t alloc = (len > 0u) ? len : 1u;
+        uint8_t *shortbuf = malloc(alloc);
+        uint8_t *ref = malloc(alloc);
+        ASSERT_TRUE(shortbuf);
+        ASSERT_TRUE(ref);
+        memset(shortbuf, 0x5A, alloc);
+        memset(ref, 0x5A, alloc);
+        size_t w = 0x5A5Au;
+        ASSERT_EQ_INT(CDS_ERR_BUFFER, cds_encode(&in, &fmt, shortbuf, len, &w));
+        ASSERT_EQ_MEM(ref, shortbuf, alloc);
+        ASSERT_TRUE(w == 0x5A5Au);
+        free(shortbuf);
+        free(ref);
+    }
+
+    /* Decoding the exact-size code succeeds and consumes all of it. */
+    cds_format_t out_fmt;
+    cds_time_t out;
+    size_t consumed = 0;
+    ASSERT_EQ_INT(CDS_OK, cds_decode(exact, need, &out_fmt, &out, &consumed));
+    ASSERT_TRUE(consumed == need);
+
+    /* Every truncation of that code is rejected; the input buffer is sized to the
+     * truncated length so any over-read is caught. */
+    for (size_t len = 0; len < need; len++)
+    {
+        size_t alloc = (len > 0u) ? len : 1u;
+        uint8_t *truncated = malloc(alloc);
+        ASSERT_TRUE(truncated);
+        memcpy(truncated, exact, len);
+        ASSERT_EQ_INT(CDS_ERR_BUFFER, cds_decode(truncated, len, &out_fmt, &out, &consumed));
+        free(truncated);
+    }
+
+    /* The same boundary on the T-field codec, which carries its own length check. */
+    uint8_t *t_exact = malloc(t_need);
+    uint8_t *t_short = malloc(t_need - 1u);
+    ASSERT_TRUE(t_exact);
+    ASSERT_TRUE(t_short);
+    written = 0;
+    ASSERT_EQ_INT(CDS_OK, cds_tfield_encode(&in, &fmt, t_exact, t_need, &written));
+    ASSERT_TRUE(written == t_need);
+    ASSERT_EQ_INT(CDS_ERR_BUFFER, cds_tfield_encode(&in, &fmt, t_short, t_need - 1u, &written));
+    consumed = 0;
+    ASSERT_EQ_INT(CDS_OK, cds_tfield_decode(t_exact, t_need, &fmt, &out, &consumed));
+    ASSERT_TRUE(consumed == t_need);
+    memcpy(t_short, t_exact, t_need - 1u);
+    ASSERT_EQ_INT(CDS_ERR_BUFFER, cds_tfield_decode(t_short, t_need - 1u, &fmt, &out, &consumed));
+    free(t_exact);
+    free(t_short);
+    free(exact);
+    return 0;
+}
+
 test_result_t test_cds_run_all(void)
 {
     RUN_TEST(test_pfield_microsecond);
@@ -291,6 +420,8 @@ test_result_t test_cds_run_all(void)
     RUN_TEST(test_tfield_encode_errors);
     RUN_TEST(test_tfield_decode_errors);
     RUN_TEST(test_encode_decode_errors);
+    RUN_TEST(test_outputs_untouched_on_failure);
+    RUN_TEST(test_buffer_size_boundaries);
 
     test_result_t r;
     r.total = cunit_total_tests;

@@ -13,6 +13,9 @@
  * is carried in a TIME SPECIFICATION FIELD (T-field) preceded by a one-octet
  * TIME CODE PREAMBLE FIELD (P-field) describing its structure.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -219,6 +222,8 @@ ccs_status_t ccs_pfield_encode(const ccs_format_t *fmt,
 /**
  * @brief Decode a P-field into a format.
  *
+ * @note On failure @p fmt and @p consumed are left unchanged.
+ *
  * @param[in]  buf      Input buffer positioned at the P-field.
  * @param[in]  buf_len  Number of octets available in @p buf.
  * @param[out] fmt      Receives the decoded format.
@@ -282,10 +287,9 @@ ccs_status_t ccs_tfield_decode(const uint8_t *buf,
 /**
  * @brief Encode a self-identified CCS code: P-field followed by T-field.
  *
- * @note On failure the contents of @p buf are unspecified, since the P-field may
- *       already be written when the T-field stage rejects the value. Only a
- *       #CCS_OK return sets @p written, so a caller that checks the status never
- *       transmits a partial code.
+ * @note On failure @p buf and @p written are left unchanged: the code is assembled in a
+ *       local buffer and copied out only once every stage has succeeded and the total
+ *       length is known to fit.
  *
  * @param[in]  time    Time value to encode.
  * @param[in]  fmt     Format to encode.
@@ -305,6 +309,9 @@ ccs_status_t ccs_encode(const ccs_time_t *time,
 
 /**
  * @brief Decode a self-identified CCS code: parse the P-field, then the T-field.
+ *
+ * @note On failure @p fmt, @p time and @p consumed are left unchanged; the code is
+ *       decoded into locals and committed only once every check has passed.
  *
  * @param[in]  buf      Input buffer positioned at the P-field.
  * @param[in]  buf_len  Number of octets available in @p buf.

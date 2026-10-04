@@ -5,6 +5,9 @@
  * Exercises the P-field / T-field codecs against the encodings defined in
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.4.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -13,6 +16,7 @@
 #include "test_runners.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* 2024-02-29T12:34:56.78, month/day variation with one sub-second segment. Every
@@ -435,6 +439,143 @@ static int test_encode_decode_errors(void)
     return 0;
 }
 
+/* Validate First, Write After: a rejected call leaves every output exactly as the caller
+ * passed it. The 0x5A fill makes any stray write visible. */
+static int test_outputs_untouched_on_failure(void)
+{
+    ccs_format_t fmt = {(ccs_variation_t)0x5A, 0x5Au};
+    ccs_time_t time = {0x5A5Au,
+                       0x5Au,
+                       0x5Au,
+                       0x5A5Au,
+                       0x5Au,
+                       0x5Au,
+                       0x5Au,
+                       {0x5Au, 0x5Au, 0x5Au, 0x5Au, 0x5Au, 0x5Au}};
+    size_t len = 0x5A5Au;
+
+    /* Resolution bits '111' are not used, so the whole P-field is rejected. */
+    uint8_t unused_resolution[1] = {0x57};
+    ASSERT_EQ_INT(CCS_ERR_FORMAT, ccs_pfield_decode(unused_resolution, 1, &fmt, &len));
+    /* The extension flag announces a second P-field octet, which CCS does not define. */
+    uint8_t extended[1] = {0xD1};
+    ASSERT_EQ_INT(CCS_ERR_UNSUPPORTED, ccs_pfield_decode(extended, 1, &fmt, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.variation);
+    ASSERT_EQ_INT(0x5A, fmt.subsecond_segments);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    /* Valid P-field, but the T-field it announces is not present. */
+    uint8_t pfield_only[1] = {0x51};
+    ASSERT_EQ_INT(CCS_ERR_BUFFER, ccs_decode(pfield_only, 1, &fmt, &time, &len));
+    /* A full code whose seconds segment is not valid BCD. */
+    uint8_t bad_bcd[9] = {0x51, 0x20, 0x24, 0x02, 0x29, 0x12, 0x34, 0x5F, 0x78};
+    ASSERT_EQ_INT(CCS_ERR_BCD, ccs_decode(bad_bcd, sizeof(bad_bcd), &fmt, &time, &len));
+    ASSERT_EQ_INT(0x5A, (int)fmt.variation);
+    ASSERT_TRUE(time.year == 0x5A5Au);
+    ASSERT_TRUE(time.second == 0x5Au);
+    ASSERT_TRUE(time.subseconds[0] == 0x5Au);
+    ASSERT_TRUE(len == 0x5A5Au);
+
+    ccs_format_t valid = {CCS_VARIATION_MONTH_DAY, 1u};
+    ccs_format_t invalid = {CCS_VARIATION_MONTH_DAY, CCS_SUBSECOND_SEGMENTS_MAX + 1u};
+    ccs_time_t out_of_range = leap_day;
+    out_of_range.day = 30u; /* February never has 30 days */
+    uint8_t buf[CCS_OCTETS_MAX];
+    uint8_t untouched[CCS_OCTETS_MAX];
+    memset(buf, 0x5A, sizeof(buf));
+    memset(untouched, 0x5A, sizeof(untouched));
+    size_t written = 0x5A5Au;
+
+    ASSERT_EQ_INT(CCS_ERR_BUFFER, ccs_encode(&leap_day, &valid, buf, 2, &written));
+    ASSERT_EQ_INT(CCS_ERR_FORMAT, ccs_encode(&leap_day, &invalid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CCS_ERR_FORMAT, ccs_encode(&out_of_range, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_encode(NULL, &valid, buf, sizeof(buf), &written));
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_encode(&leap_day, &valid, NULL, sizeof(buf), &written));
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_encode(&leap_day, &valid, buf, sizeof(buf), NULL));
+    ASSERT_EQ_MEM(untouched, buf, sizeof(buf));
+    ASSERT_TRUE(written == 0x5A5Au);
+
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_decode(pfield_only, 1, NULL, &time, &len));
+    ASSERT_EQ_INT(CCS_ERR_NULL, ccs_decode(pfield_only, 1, &fmt, NULL, &len));
+    return 0;
+}
+
+/* Buffer-size boundaries. Exact-size heap allocations make a one-octet overrun or
+ * over-read visible to ASan instead of landing in slack space, and the sizes are derived
+ * from ccs_size()/ccs_tfield_size() rather than hard-coded. */
+static int test_buffer_size_boundaries(void)
+{
+    ccs_format_t fmt = {CCS_VARIATION_MONTH_DAY, 1u};
+    ccs_time_t in = leap_day;
+    size_t need = ccs_size(&fmt);
+    size_t t_need = ccs_tfield_size(&fmt);
+    ASSERT_EQ_INT(9, (int)need);
+    ASSERT_EQ_INT(8, (int)t_need);
+
+    /* Exactly the required size succeeds. */
+    uint8_t *exact = malloc(need);
+    size_t written = 0;
+    ASSERT_TRUE(exact);
+    ASSERT_EQ_INT(CCS_OK, ccs_encode(&in, &fmt, exact, need, &written));
+    ASSERT_TRUE(written == need);
+
+    /* Every length shorter than the requirement is rejected with nothing written. */
+    for (size_t len = 0; len < need; len++)
+    {
+        size_t alloc = (len > 0u) ? len : 1u;
+        uint8_t *shortbuf = malloc(alloc);
+        uint8_t *ref = malloc(alloc);
+        ASSERT_TRUE(shortbuf);
+        ASSERT_TRUE(ref);
+        memset(shortbuf, 0x5A, alloc);
+        memset(ref, 0x5A, alloc);
+        size_t w = 0x5A5Au;
+        ASSERT_EQ_INT(CCS_ERR_BUFFER, ccs_encode(&in, &fmt, shortbuf, len, &w));
+        ASSERT_EQ_MEM(ref, shortbuf, alloc);
+        ASSERT_TRUE(w == 0x5A5Au);
+        free(shortbuf);
+        free(ref);
+    }
+
+    /* Decoding the exact-size code succeeds and consumes all of it. */
+    ccs_format_t out_fmt;
+    ccs_time_t out;
+    size_t consumed = 0;
+    ASSERT_EQ_INT(CCS_OK, ccs_decode(exact, need, &out_fmt, &out, &consumed));
+    ASSERT_TRUE(consumed == need);
+
+    /* Every truncation of that code is rejected; the input buffer is sized to the
+     * truncated length so any over-read is caught. */
+    for (size_t len = 0; len < need; len++)
+    {
+        size_t alloc = (len > 0u) ? len : 1u;
+        uint8_t *truncated = malloc(alloc);
+        ASSERT_TRUE(truncated);
+        memcpy(truncated, exact, len);
+        ASSERT_EQ_INT(CCS_ERR_BUFFER, ccs_decode(truncated, len, &out_fmt, &out, &consumed));
+        free(truncated);
+    }
+
+    /* The same boundary on the T-field codec, which carries its own length check. */
+    uint8_t *t_exact = malloc(t_need);
+    uint8_t *t_short = malloc(t_need - 1u);
+    ASSERT_TRUE(t_exact);
+    ASSERT_TRUE(t_short);
+    written = 0;
+    ASSERT_EQ_INT(CCS_OK, ccs_tfield_encode(&in, &fmt, t_exact, t_need, &written));
+    ASSERT_TRUE(written == t_need);
+    ASSERT_EQ_INT(CCS_ERR_BUFFER, ccs_tfield_encode(&in, &fmt, t_short, t_need - 1u, &written));
+    consumed = 0;
+    ASSERT_EQ_INT(CCS_OK, ccs_tfield_decode(t_exact, t_need, &fmt, &out, &consumed));
+    ASSERT_TRUE(consumed == t_need);
+    memcpy(t_short, t_exact, t_need - 1u);
+    ASSERT_EQ_INT(CCS_ERR_BUFFER, ccs_tfield_decode(t_short, t_need - 1u, &fmt, &out, &consumed));
+    free(t_exact);
+    free(t_short);
+    free(exact);
+    return 0;
+}
+
 test_result_t test_ccs_run_all(void)
 {
     RUN_TEST(test_pfield_month_day);
@@ -454,6 +595,8 @@ test_result_t test_ccs_run_all(void)
     RUN_TEST(test_tfield_decode_errors);
     RUN_TEST(test_tfield_decode_bcd_errors);
     RUN_TEST(test_encode_decode_errors);
+    RUN_TEST(test_outputs_untouched_on_failure);
+    RUN_TEST(test_buffer_size_boundaries);
 
     test_result_t r;
     r.total = cunit_total_tests;

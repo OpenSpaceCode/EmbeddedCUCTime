@@ -5,6 +5,9 @@
  * Implements the CCSDS Unsegmented Time Code (CUC) as per
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.2.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -183,32 +186,34 @@ cuc_status_t cuc_pfield_decode(const uint8_t *buf,
         return CUC_ERR_PFIELD_ID;
     }
 
-    fmt->epoch = (cuc_epoch_t)id;
-    fmt->basic_octets = (uint8_t)(((oct1 >> CUC_P1_BASIC_SHIFT) & CUC_P1_BASIC_MASK) + 1u);
-    fmt->fraction_octets = (uint8_t)(oct1 & CUC_P1_FRAC_MASK);
+    cuc_format_t decoded;
+    decoded.epoch = (cuc_epoch_t)id;
+    decoded.basic_octets = (uint8_t)(((oct1 >> CUC_P1_BASIC_SHIFT) & CUC_P1_BASIC_MASK) + 1u);
+    decoded.fraction_octets = (uint8_t)(oct1 & CUC_P1_FRAC_MASK);
+    size_t size = 1u;
 
-    if ((oct1 & CUC_P1_EXTENSION) == 0u)
+    if ((oct1 & CUC_P1_EXTENSION) != 0u)
     {
-        *consumed = 1u;
+        if (buf_len < 2u)
+        {
+            return CUC_ERR_BUFFER;
+        }
 
-        return CUC_OK;
+        uint8_t oct2 = buf[1];
+        /* A third P-field octet would be signalled here; this library defines only two. */
+        if ((oct2 & CUC_P2_EXTENSION) != 0u)
+        {
+            return CUC_ERR_UNSUPPORTED;
+        }
+
+        decoded.basic_octets += (uint8_t)((oct2 >> CUC_P2_ADD_BASIC_SHIFT) & CUC_P2_ADD_BASIC_MASK);
+        decoded.fraction_octets +=
+            (uint8_t)((oct2 >> CUC_P2_ADD_FRAC_SHIFT) & CUC_P2_ADD_FRAC_MASK);
+        size = 2u;
     }
 
-    if (buf_len < 2u)
-    {
-        return CUC_ERR_BUFFER;
-    }
-
-    uint8_t oct2 = buf[1];
-    /* A third P-field octet would be signalled here; this library defines only two. */
-    if ((oct2 & CUC_P2_EXTENSION) != 0u)
-    {
-        return CUC_ERR_UNSUPPORTED;
-    }
-
-    fmt->basic_octets += (uint8_t)((oct2 >> CUC_P2_ADD_BASIC_SHIFT) & CUC_P2_ADD_BASIC_MASK);
-    fmt->fraction_octets += (uint8_t)((oct2 >> CUC_P2_ADD_FRAC_SHIFT) & CUC_P2_ADD_FRAC_MASK);
-    *consumed = 2u;
+    *fmt = decoded;
+    *consumed = size;
 
     return CUC_OK;
 }
@@ -309,26 +314,39 @@ cuc_status_t cuc_encode(const cuc_time_t *time,
                         size_t buf_len,
                         size_t *written)
 {
-    if (!written)
+    if ((!buf) || (!written))
     {
         return CUC_ERR_NULL;
     }
 
+    /* Assemble the code in a local buffer so the caller's buffer is written only once
+       every stage has succeeded and the total length is known to fit. */
+    uint8_t staging[CUC_OCTETS_MAX];
     size_t p_len = 0;
-    cuc_status_t status = cuc_pfield_encode(fmt, buf, buf_len, &p_len);
+    cuc_status_t status = cuc_pfield_encode(fmt, staging, sizeof(staging), &p_len);
     if (status != CUC_OK)
     {
         return status;
     }
 
     size_t t_len = 0;
-    status = cuc_tfield_encode(time, fmt, buf + p_len, buf_len - p_len, &t_len);
+    status = cuc_tfield_encode(time, fmt, staging + p_len, sizeof(staging) - p_len, &t_len);
     if (status != CUC_OK)
     {
         return status;
     }
 
-    *written = p_len + t_len;
+    size_t size = p_len + t_len;
+    if (buf_len < size)
+    {
+        return CUC_ERR_BUFFER;
+    }
+
+    for (size_t i = 0; i < size; i++)
+    {
+        buf[i] = staging[i];
+    }
+    *written = size;
 
     return CUC_OK;
 }
@@ -339,25 +357,29 @@ cuc_status_t cuc_decode(const uint8_t *buf,
                         cuc_time_t *time,
                         size_t *consumed)
 {
-    if (!consumed)
+    if ((!fmt) || (!time) || (!consumed))
     {
         return CUC_ERR_NULL;
     }
 
+    cuc_format_t decoded_fmt;
     size_t p_len = 0;
-    cuc_status_t status = cuc_pfield_decode(buf, buf_len, fmt, &p_len);
+    cuc_status_t status = cuc_pfield_decode(buf, buf_len, &decoded_fmt, &p_len);
     if (status != CUC_OK)
     {
         return status;
     }
 
+    cuc_time_t decoded_time;
     size_t t_len = 0;
-    status = cuc_tfield_decode(buf + p_len, buf_len - p_len, fmt, time, &t_len);
+    status = cuc_tfield_decode(buf + p_len, buf_len - p_len, &decoded_fmt, &decoded_time, &t_len);
     if (status != CUC_OK)
     {
         return status;
     }
 
+    *fmt = decoded_fmt;
+    *time = decoded_time;
     *consumed = p_len + t_len;
 
     return CUC_OK;

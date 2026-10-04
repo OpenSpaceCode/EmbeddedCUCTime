@@ -5,6 +5,9 @@
  * Implements the CCSDS Calendar Segmented Time Code (CCS) as per
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.4.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -501,7 +504,7 @@ ccs_status_t ccs_tfield_decode(const uint8_t *buf,
     }
 
     /* Decode into a local so a malformed segment cannot leave *time half written. */
-    ccs_time_t decoded = {0};
+    ccs_time_t decoded = {0, 0, 0, 0, 0, 0, 0, {0, 0, 0, 0, 0, 0}};
     status = ccs_decode_date(buf, fmt, &decoded);
     if (status != CCS_OK)
     {
@@ -529,26 +532,39 @@ ccs_status_t ccs_encode(const ccs_time_t *time,
                         size_t buf_len,
                         size_t *written)
 {
-    if (!written)
+    if ((!buf) || (!written))
     {
         return CCS_ERR_NULL;
     }
 
+    /* Assemble the code in a local buffer so the caller's buffer is written only once
+       every stage has succeeded and the total length is known to fit. */
+    uint8_t staging[CCS_OCTETS_MAX];
     size_t p_len = 0;
-    ccs_status_t status = ccs_pfield_encode(fmt, buf, buf_len, &p_len);
+    ccs_status_t status = ccs_pfield_encode(fmt, staging, sizeof(staging), &p_len);
     if (status != CCS_OK)
     {
         return status;
     }
 
     size_t t_len = 0;
-    status = ccs_tfield_encode(time, fmt, buf + p_len, buf_len - p_len, &t_len);
+    status = ccs_tfield_encode(time, fmt, staging + p_len, sizeof(staging) - p_len, &t_len);
     if (status != CCS_OK)
     {
         return status;
     }
 
-    *written = p_len + t_len;
+    size_t size = p_len + t_len;
+    if (buf_len < size)
+    {
+        return CCS_ERR_BUFFER;
+    }
+
+    for (size_t i = 0; i < size; i++)
+    {
+        buf[i] = staging[i];
+    }
+    *written = size;
     return CCS_OK;
 }
 
@@ -558,25 +574,29 @@ ccs_status_t ccs_decode(const uint8_t *buf,
                         ccs_time_t *time,
                         size_t *consumed)
 {
-    if (!consumed)
+    if ((!fmt) || (!time) || (!consumed))
     {
         return CCS_ERR_NULL;
     }
 
+    ccs_format_t decoded_fmt;
     size_t p_len = 0;
-    ccs_status_t status = ccs_pfield_decode(buf, buf_len, fmt, &p_len);
+    ccs_status_t status = ccs_pfield_decode(buf, buf_len, &decoded_fmt, &p_len);
     if (status != CCS_OK)
     {
         return status;
     }
 
+    ccs_time_t decoded_time;
     size_t t_len = 0;
-    status = ccs_tfield_decode(buf + p_len, buf_len - p_len, fmt, time, &t_len);
+    status = ccs_tfield_decode(buf + p_len, buf_len - p_len, &decoded_fmt, &decoded_time, &t_len);
     if (status != CCS_OK)
     {
         return status;
     }
 
+    *fmt = decoded_fmt;
+    *time = decoded_time;
     *consumed = p_len + t_len;
     return CCS_OK;
 }

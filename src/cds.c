@@ -5,6 +5,9 @@
  * Implements the CCSDS Day Segmented Time Code (CDS) as per
  * CCSDS 301.0-B-4 (Time Code Formats), Section 3.3.
  *
+ * Copyright 2026 OpenSpaceCode contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -200,17 +203,18 @@ cds_status_t cds_pfield_decode(const uint8_t *buf,
         return CDS_ERR_PFIELD_ID;
     }
 
-    fmt->epoch = (cds_epoch_t)((octet >> CDS_P_EPOCH_SHIFT) & CDS_P_EPOCH_MASK);
-    fmt->day_length = (cds_day_length_t)((octet >> CDS_P_DAY_SHIFT) & CDS_P_DAY_MASK);
-    fmt->submillisecond = (cds_subms_t)(octet & CDS_P_SUBMS_MASK);
+    cds_subms_t submillisecond = (cds_subms_t)(octet & CDS_P_SUBMS_MASK);
 
     /* Bits 6-7 = '11' is reserved for future use (CCSDS 301.0-B-4, 3.3.2). */
-    if ((fmt->submillisecond != CDS_SUBMS_NONE) && (fmt->submillisecond != CDS_SUBMS_US) &&
-        (fmt->submillisecond != CDS_SUBMS_PS))
+    if ((submillisecond != CDS_SUBMS_NONE) && (submillisecond != CDS_SUBMS_US) &&
+        (submillisecond != CDS_SUBMS_PS))
     {
         return CDS_ERR_FORMAT;
     }
 
+    fmt->epoch = (cds_epoch_t)((octet >> CDS_P_EPOCH_SHIFT) & CDS_P_EPOCH_MASK);
+    fmt->day_length = (cds_day_length_t)((octet >> CDS_P_DAY_SHIFT) & CDS_P_DAY_MASK);
+    fmt->submillisecond = submillisecond;
     *consumed = CDS_PFIELD_OCTETS;
     return CDS_OK;
 }
@@ -319,26 +323,39 @@ cds_status_t cds_encode(const cds_time_t *time,
                         size_t buf_len,
                         size_t *written)
 {
-    if (!written)
+    if ((!buf) || (!written))
     {
         return CDS_ERR_NULL;
     }
 
+    /* Assemble the code in a local buffer so the caller's buffer is written only once
+       every stage has succeeded and the total length is known to fit. */
+    uint8_t staging[CDS_OCTETS_MAX];
     size_t p_len = 0;
-    cds_status_t status = cds_pfield_encode(fmt, buf, buf_len, &p_len);
+    cds_status_t status = cds_pfield_encode(fmt, staging, sizeof(staging), &p_len);
     if (status != CDS_OK)
     {
         return status;
     }
 
     size_t t_len = 0;
-    status = cds_tfield_encode(time, fmt, buf + p_len, buf_len - p_len, &t_len);
+    status = cds_tfield_encode(time, fmt, staging + p_len, sizeof(staging) - p_len, &t_len);
     if (status != CDS_OK)
     {
         return status;
     }
 
-    *written = p_len + t_len;
+    size_t size = p_len + t_len;
+    if (buf_len < size)
+    {
+        return CDS_ERR_BUFFER;
+    }
+
+    for (size_t i = 0; i < size; i++)
+    {
+        buf[i] = staging[i];
+    }
+    *written = size;
     return CDS_OK;
 }
 
@@ -348,25 +365,29 @@ cds_status_t cds_decode(const uint8_t *buf,
                         cds_time_t *time,
                         size_t *consumed)
 {
-    if (!consumed)
+    if ((!fmt) || (!time) || (!consumed))
     {
         return CDS_ERR_NULL;
     }
 
+    cds_format_t decoded_fmt;
     size_t p_len = 0;
-    cds_status_t status = cds_pfield_decode(buf, buf_len, fmt, &p_len);
+    cds_status_t status = cds_pfield_decode(buf, buf_len, &decoded_fmt, &p_len);
     if (status != CDS_OK)
     {
         return status;
     }
 
+    cds_time_t decoded_time;
     size_t t_len = 0;
-    status = cds_tfield_decode(buf + p_len, buf_len - p_len, fmt, time, &t_len);
+    status = cds_tfield_decode(buf + p_len, buf_len - p_len, &decoded_fmt, &decoded_time, &t_len);
     if (status != CDS_OK)
     {
         return status;
     }
 
+    *fmt = decoded_fmt;
+    *time = decoded_time;
     *consumed = p_len + t_len;
     return CDS_OK;
 }

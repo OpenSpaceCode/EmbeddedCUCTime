@@ -106,20 +106,26 @@ make lib        # produces build/libcuc.a, build/libcds.a and build/libccs.a
 
 ```bash
 make example
-./build/examples/cuc_example
-./build/examples/cds_example
-./build/examples/ccs_example
 ```
 
 ### Run the tests
 
 ```bash
-make run        # or: make ctest && ./build/tests/ctest
+make test       # or: make ctest && ./build/tests/ctest
+```
+
+### Sanitizers
+
+Runs the test suite and the examples under AddressSanitizer and
+UndefinedBehaviorSanitizer:
+
+```bash
+make sanitize
 ```
 
 ### Coverage (HTML)
 
-Requires `gcovr` (`pip install gcovr`):
+Requires `gcovr` (`pip install gcovr`). Fails below 100% line or branch coverage:
 
 ```bash
 make coverage-html   # writes build/coverage/index.html
