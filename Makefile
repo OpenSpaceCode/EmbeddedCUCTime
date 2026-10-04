@@ -1,8 +1,11 @@
 CC ?= cc
 AR ?= ar
 OPT ?= -O2
+SANITIZE_OPT = -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
+               -fno-sanitize-recover=all
 CFLAGS ?= -std=c99 -Iinclude
 BUILD_DIR = build
+SANITIZE_DIR = $(BUILD_DIR)/sanitize
 
 WARNINGS = -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
 ALL_CFLAGS = $(CFLAGS) $(WARNINGS)
@@ -82,10 +85,37 @@ $(CCS_EXAMPLE): examples/ccs_example.c $(CCS_SRC) $(CCS_HDR)
 run: $(CTEST)
 	$(CTEST)
 
+# Instrumented rebuild; program output is shown only on failure and the build is removed
+# afterwards, on success and on failure.
+sanitize:
+	@$(MAKE) --no-print-directory clean >/dev/null
+	@$(MAKE) --no-print-directory ctest example OPT="$(SANITIZE_OPT)" >/dev/null \
+		|| { $(MAKE) --no-print-directory clean >/dev/null; exit 1; }
+	@mkdir -p $(SANITIZE_DIR)
+	@echo "Sanitizers (ASan + UBSan):"
+	@./$(CTEST) >$(SANITIZE_DIR)/unit_tests.log \
+		&& echo "  libraries via unit tests : no errors detected" \
+		|| { cat $(SANITIZE_DIR)/unit_tests.log; echo "  libraries via unit tests : FAILED"; \
+		     $(MAKE) --no-print-directory clean >/dev/null; exit 1; }
+	@./$(CUC_EXAMPLE) >$(SANITIZE_DIR)/cuc_example.log \
+		&& echo "  cuc via example          : no errors detected" \
+		|| { cat $(SANITIZE_DIR)/cuc_example.log; echo "  cuc via example          : FAILED"; \
+		     $(MAKE) --no-print-directory clean >/dev/null; exit 1; }
+	@./$(CDS_EXAMPLE) >$(SANITIZE_DIR)/cds_example.log \
+		&& echo "  cds via example          : no errors detected" \
+		|| { cat $(SANITIZE_DIR)/cds_example.log; echo "  cds via example          : FAILED"; \
+		     $(MAKE) --no-print-directory clean >/dev/null; exit 1; }
+	@./$(CCS_EXAMPLE) >$(SANITIZE_DIR)/ccs_example.log \
+		&& echo "  ccs via example          : no errors detected" \
+		|| { cat $(SANITIZE_DIR)/ccs_example.log; echo "  ccs via example          : FAILED"; \
+		     $(MAKE) --no-print-directory clean >/dev/null; exit 1; }
+	@$(MAKE) --no-print-directory clean >/dev/null
+	@echo "Result: PASS"
+
 coverage-html:
 	bash tools/coverage-html.sh
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all lib ctest example run coverage-html clean
+.PHONY: all lib ctest example run sanitize coverage-html clean
