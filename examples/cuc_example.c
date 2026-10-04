@@ -5,6 +5,11 @@
  * Encodes a time value into a self-identified CUC code and decodes it back,
  * printing the intermediate octets. Demonstrates CCSDS 301.0-B-4, Section 3.2.
  *
+ * The example stays integer-only, like the codec itself, so it builds and runs
+ * unchanged on targets without an FPU and under -DCUC_NO_FLOAT. The optional
+ * cuc_time_to_seconds() / cuc_time_from_seconds() helpers are deliberately
+ * unused here.
+ *
  * OpenSpaceCode — https://github.com/OpenSpaceCode
  */
 
@@ -16,7 +21,10 @@ int main(void)
 {
     /* 4 octets of seconds, 2 octets of fraction, CCSDS 1958 TAI epoch. */
     cuc_format_t fmt = {CUC_EPOCH_CCSDS, 4, 2};
-    cuc_time_t time = cuc_time_from_seconds(1234567.25);
+
+    /* 1234567.25 s since the epoch. The fraction is an unsigned Q0.64 binary
+     * fraction of a second, so a quarter second is 2^64 / 4, i.e. 1 << 62. */
+    cuc_time_t time = {UINT64_C(1234567), UINT64_C(1) << 62};
 
     uint8_t buf[CUC_OCTETS_MAX];
     size_t written = 0;
@@ -42,8 +50,15 @@ int main(void)
         return 1;
     }
 
-    printf("decoded: %.3f s (%u basic + %u fractional octets)\n",
-           cuc_time_to_seconds(&decoded),
+    /* Render the Q0.64 fraction as milliseconds without floating point. Scaling
+     * only the top 32 bits keeps the product inside uint64_t, and the discarded
+     * low bits are worth less than 2^-32 s. */
+    uint32_t fraction_hi = (uint32_t)(decoded.fraction >> 32);
+    uint32_t milliseconds = (uint32_t)(((uint64_t)fraction_hi * 1000u) >> 32);
+
+    printf("decoded: %llu.%03u s (%u basic + %u fractional octets)\n",
+           (unsigned long long)decoded.seconds,
+           milliseconds,
            decoded_fmt.basic_octets,
            decoded_fmt.fraction_octets);
     return 0;
